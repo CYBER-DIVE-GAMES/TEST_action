@@ -1,0 +1,15 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #080814;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  color: #eee;
+  font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", sans-serif;
+}
+canvas {
+  border: 2px solid #5d5dd6;
+  background: linear-gradient(#1a1a2e, #0f0f1e);
+  image-rendering: pixelated;
+}
