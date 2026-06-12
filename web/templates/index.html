@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JRA AI予想ツール</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --green: #1a6b3a;
+    --green-light: #2d9b56;
+    --gold: #c9a84c;
+    --dark: #1a1a2e;
+    --card-bg: #ffffff;
+    --sidebar-bg: #16213e;
+    --text-main: #1a1a2e;
+    --text-muted: #6b7280;
+    --border: #e5e7eb;
+    --red: #dc2626;
+    --blue: #2563eb;
+    --orange: #ea580c;
+    --purple: #7c3aed;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; background: #f0f4f8; color: var(--text-main); display: flex; min-height: 100vh; }
+
+  /* サイドバー */
+  .sidebar {
+    width: 220px; min-height: 100vh; background: var(--sidebar-bg);
+    color: #fff; display: flex; flex-direction: column; flex-shrink: 0;
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
+  }
+  .sidebar-logo {
+    padding: 24px 20px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    font-size: 20px; font-weight: 900; letter-spacing: 2px;
+    color: var(--gold);
+  }
+  .sidebar-logo span { font-size: 11px; display: block; color: rgba(255,255,255,0.5); font-weight: 400; margin-top: 2px; letter-spacing: 1px; }
+  .sidebar-nav { padding: 16px 0; flex: 1; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 20px; font-size: 13px; cursor: pointer;
+    transition: background 0.15s; border-left: 3px solid transparent;
+    color: rgba(255,255,255,0.7);
+  }
+  .nav-item:hover { background: rgba(255,255,255,0.07); color: #fff; }
+  .nav-item.active { background: rgba(201,168,76,0.15); border-left-color: var(--gold); color: var(--gold); }
+  .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+
+  /* メインコンテンツ */
+  .main { margin-left: 220px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+  /* ヘッダー */
+  .header {
+    background: var(--green); color: #fff;
+    padding: 0 24px; height: 56px; display: flex; align-items: center;
+    justify-content: space-between; position: sticky; top: 0; z-index: 50;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .race-selector {
+    background: rgba(255,255,255,0.15); border: none; color: #fff;
+    padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer;
+  }
+  .btn-search {
+    background: var(--gold); color: #fff; border: none;
+    padding: 7px 18px; border-radius: 6px; font-size: 13px;
+    cursor: pointer; font-weight: 700; transition: opacity 0.15s;
+  }
+  .btn-search:hover { opacity: 0.85; }
+  .race-id-input {
+    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+    color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 13px; width: 180px;
+  }
+  .race-id-input::placeholder { color: rgba(255,255,255,0.5); }
+
+  /* コンテンツエリア */
+  .content { padding: 20px 24px; flex: 1; }
+
+  /* レースヘッダーカード */
+  .race-hero {
+    background: linear-gradient(135deg, var(--dark) 0%, var(--green) 60%, var(--green-light) 100%);
+    border-radius: 12px; padding: 20px 24px; color: #fff; margin-bottom: 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: relative; overflow: hidden; min-height: 110px;
+  }
+  .race-hero::before {
+    content: '🏇'; font-size: 120px; position: absolute; right: 20px; top: -10px;
+    opacity: 0.15; transform: scaleX(-1);
+  }
+  .race-venue { font-size: 12px; opacity: 0.7; margin-bottom: 4px; }
+  .race-title { font-size: 26px; font-weight: 900; margin-bottom: 6px; letter-spacing: 1px; }
+  .race-cond { font-size: 12px; opacity: 0.8; display: flex; gap: 12px; }
+  .race-cond span { background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 4px; }
+  .top-horse-badge {
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 10px; padding: 12px 18px; text-align: center; min-width: 140px;
+    backdrop-filter: blur(4px);
+  }
+  .badge-label { font-size: 10px; opacity: 0.7; margin-bottom: 4px; }
+  .badge-name { font-size: 16px; font-weight: 900; margin-bottom: 4px; }
+  .badge-score { font-size: 40px; font-weight: 900; color: var(--gold); line-height: 1; }
+  .badge-score-label { font-size: 10px; opacity: 0.6; }
+
+  /* グリッドレイアウト */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+  /* カード */
+  .card { background: var(--card-bg); border-radius: 10px; padding: 16px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+  .card-title { font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  .card-title::before { content: ''; width: 3px; height: 14px; background: var(--green); border-radius: 2px; display: inline-block; }
+
+  /* 出馬表 */
+  .horse-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .horse-table th {
+    background: #f8fafc; color: var(--text-muted); font-weight: 600;
+    padding: 6px 8px; text-align: center; border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+  }
+  .horse-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: center; vertical-align: middle; }
+  .horse-table tr:hover { background: #f8fafc; }
+  .frame-badge {
+    width: 22px; height: 22px; border-radius: 50%; display: inline-flex;
+    align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 11px;
+  }
+  .horse-name-cell { text-align: left !important; font-weight: 600; }
+  .odds-high { color: var(--red); font-weight: 700; }
+  .odds-mid { color: var(--orange); font-weight: 600; }
+  .odds-low { color: var(--text-muted); }
+
+  /* AIスコアバー */
+  .score-bar { display: flex; align-items: center; gap: 6px; }
+  .score-track { flex: 1; height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
+  .score-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+  .score-num { font-size: 11px; font-weight: 700; min-width: 24px; text-align: right; }
+
+  /* 推奨馬券 */
+  .recommend-grid { display: grid; gap: 8px; }
+  .rec-item {
+    border-radius: 8px; padding: 10px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    border: 1px solid var(--border);
+  }
+  .rec-left { display: flex; align-items: center; gap: 10px; }
+  .bet-type-badge {
+    padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;
+    white-space: nowrap;
+  }
+  .bt-fukusho  { background: #dcfce7; color: #166534; }
+  .bt-wide     { background: #dbeafe; color: #1e40af; }
+  .bt-umaren   { background: #fef3c7; color: #92400e; }
+  .bt-sanren   { background: #f3e8ff; color: #6b21a8; }
+  .rec-combo { font-weight: 700; font-size: 13px; }
+  .rec-names { font-size: 11px; color: var(--text-muted); }
+  .rec-right { display: flex; align-items: center; gap: 16px; text-align: right; }
+  .rec-ev { font-size: 12px; }
+  .rec-ev strong { color: var(--green); }
+  .rec-odds { font-size: 16px; font-weight: 900; color: var(--red); }
+  .rec-stake { font-size: 11px; color: var(--text-muted); }
+  .rec-stake strong { color: var(--text-main); font-size: 13px; }
+
+  /* 統計カード */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-item { text-align: center; padding: 10px; background: #f8fafc; border-radius: 8px; }
+  .stat-val { font-size: 24px; font-weight: 900; color: var(--green); }
+  .stat-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  /* チャートカード */
+  .chart-wrap { position: relative; height: 200px; }
+
+  /* 総購入金額エリア */
+  .total-bar {
+    background: linear-gradient(90deg, var(--green), var(--green-light));
+    border-radius: 8px; padding: 12px 18px; color: #fff;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 12px;
+  }
+  .total-label { font-size: 12px; opacity: 0.8; }
+  .total-amount { font-size: 22px; font-weight: 900; }
+
+  /* 枠色 */
+  .f1 { background: #ffffff; color: #333; border: 2px solid #999; }
+  .f2 { background: #000000; color: #fff; }
+  .f3 { background: #dc2626; color: #fff; }
+  .f4 { background: #3b82f6; color: #fff; }
+  .f5 { background: #f59e0b; color: #fff; }
+  .f6 { background: #10b981; color: #fff; }
+  .f7 { background: #f97316; color: #fff; }
+  .f8 { background: #ec4899; color: #fff; }
+
+  /* ローディング */
+  .loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: var(--text-muted); gap: 10px; }
+  .spinner { width: 20px; height: 20px; border: 2px solid #e5e7eb; border-top-color: var(--green); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ポップアップ通知 */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--dark); color: #fff; padding: 12px 18px; border-radius: 8px; font-size: 13px; z-index: 9999; opacity: 0; transform: translateY(10px); transition: all 0.3s; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- サイドバー -->
+<aside class="sidebar">
+  <div class="sidebar-logo">⚡ EQUINOX<span>JRA AI PREDICTOR</span></div>
+  <nav class="sidebar-nav">
+    <div class="nav-item active"><span class="nav-icon">🏠</span>ダッシュボード</div>
+    <div class="nav-item"><span class="nav-icon">🔍</span>レース検索</div>
+    <div class="nav-item"><span class="nav-icon">🏇</span>馬データベース</div>
+    <div class="nav-item"><span class="nav-icon">📊</span>成績分析</div>
+    <div class="nav-item"><span class="nav-icon">⚙️</span>設定</div>
+  </nav>
+</aside>
+
+<!-- メインコンテンツ -->
+<div class="main">
+
+  <!-- ヘッダー -->
+  <header class="header">
+    <div class="header-left">
+      <input class="race-id-input" id="raceIdInput" type="text" placeholder="レースID（例: 202405050811）" value="202405050811">
+      <button class="btn-search" onclick="loadRace()">🔍 予測実行</button>
+    </div>
+    <div style="font-size:12px; opacity:0.8;" id="lastUpdated">最終更新: ー</div>
+  </header>
+
+  <!-- コンテンツ -->
+  <div class="content" id="content">
+    <div class="loading"><div class="spinner"></div>データを読み込み中...</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const FRAME_COLORS = ['f1','f2','f3','f4','f5','f6','f7','f8'];
+let radarChart = null;
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function betTypeClass(bt) {
+  if (bt === '複勝') return 'bt-fukusho';
+  if (bt === 'ワイド') return 'bt-wide';
+  if (bt === '馬連') return 'bt-umaren';
+  return 'bt-sanren';
+}
+
+function scoreColor(s) {
+  if (s >= 85) return '#16a34a';
+  if (s >= 70) return '#2563eb';
+  if (s >= 55) return '#ea580c';
+  return '#9ca3af';
+}
+
+function oddsClass(odds) {
+  if (odds <= 5) return 'odds-high';
+  if (odds <= 15) return 'odds-mid';
+  return 'odds-low';
+}
+
+function renderHorseTable(horses) {
+  return `
+  <table class="horse-table">
+    <thead>
+      <tr>
+        <th>枠</th><th>馬番</th><th>馬名</th><th>性齢</th><th>騎手</th>
+        <th>斤量</th><th>馬体重</th><th>単勝</th><th>人気</th><th>AIスコア</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${horses.map(h => `
+      <tr>
+        <td><span class="frame-badge ${FRAME_COLORS[h.frame-1]}">${h.frame}</span></td>
+        <td style="font-weight:700">${h.number}</td>
+        <td class="horse-name-cell">${h.name}</td>
+        <td>${h.sex_age}</td>
+        <td>${h.jockey}</td>
+        <td>${h.weight_carried}</td>
+        <td>${h.weight > 0 ? h.weight + (h.weight_diff >= 0 ? '<span style="color:#16a34a;font-size:10px">(+'+h.weight_diff+')</span>' : '<span style="color:#dc2626;font-size:10px">('+h.weight_diff+')</span>') : 'ー'}</td>
+        <td class="${oddsClass(h.win_odds)}">${h.win_odds}</td>
+        <td><span style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:11px">${h.popularity}番人気</span></td>
+        <td>
+          <div class="score-bar">
+            <div class="score-track">
+              <div class="score-fill" style="width:${h.score}%;background:${scoreColor(h.score)}"></div>
+            </div>
+            <span class="score-num" style="color:${scoreColor(h.score)}">${h.score}</span>
+          </div>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+function renderRecommendations(recs) {
+  return recs.map(r => `
+  <div class="rec-item">
+    <div class="rec-left">
+      <span class="bet-type-badge ${betTypeClass(r.bet_type)}">${r.bet_type}</span>
+      <div>
+        <div class="rec-combo">${r.combination}</div>
+        <div class="rec-names">${r.horse_names}</div>
+      </div>
+    </div>
+    <div class="rec-right">
+      <div class="rec-ev">期待値 <strong>${r.expected_value.toFixed(2)}</strong></div>
+      <div>
+        <div class="rec-odds">${r.odds}倍</div>
+        <div class="rec-stake">購入額 <strong>¥${r.stake.toLocaleString()}</strong></div>
+      </div>
+    </div>
+  </div>`).join('');
+}
+
+function renderPage(data) {
+  const d = data;
+  const totalStake = d.recommendations.reduce((s,r) => s+r.stake, 0);
+
+  document.getElementById('content').innerHTML = `
+  <!-- レースヒーロー -->
+  <div class="race-hero">
+    <div>
+      <div class="race-venue">${d.venue} &nbsp;|&nbsp; ${d.date}</div>
+      <div class="race-title">${d.race_name}</div>
+      <div class="race-cond">
+        ${d.conditions.split('/').map(c => `<span>${c.trim()}</span>`).join('')}
+        <span>出走 ${d.field_count}頭</span>
+      </div>
+    </div>
+    <div class="top-horse-badge">
+      <div class="badge-label">🏆 AI本命</div>
+      <div class="badge-name">${d.top_horse.name}</div>
+      <div class="badge-score">${d.top_horse.score}</div>
+      <div class="badge-score-label">AIスコア</div>
+    </div>
+  </div>
+
+  <!-- 上段: 出馬表 + レーダー -->
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title">AI総合評価 出馬表</div>
+      ${renderHorseTable(d.horses.slice(0, 8))}
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card">
+        <div class="card-title">コース適性チャート（本命馬）</div>
+        <div class="chart-wrap"><canvas id="radarChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">バックテスト実績</div>
+        <div class="stat-grid">
+          <div class="stat-item">
+            <div class="stat-val">${d.stats.hit_rate}%</div>
+            <div class="stat-label">的中率（複勝）</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-val" style="color:var(--gold)">${d.stats.roi}%</div>
+            <div class="stat-label">回収率</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 下段: 残り出馬表 + 推奨馬券 -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">出馬表（つづき）</div>
+      ${renderHorseTable(d.horses.slice(8))}
+    </div>
+    <div class="card">
+      <div class="card-title">🎯 おすすめ買い目</div>
+      <div class="recommend-grid">
+        ${renderRecommendations(d.recommendations)}
+      </div>
+      <div class="total-bar" style="margin-top:12px">
+        <div>
+          <div class="total-label">合計購入金額</div>
+          <div class="total-amount">¥${totalStake.toLocaleString()}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="total-label">期待回収額</div>
+          <div class="total-amount">¥${d.stats.expected_return.toLocaleString()}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  `;
+
+  // レーダーチャート描画
+  if (radarChart) radarChart.destroy();
+  const ctx = document.getElementById('radarChart').getContext('2d');
+  radarChart = new Chart(ctx, {
+    type: 'radar',
+    data: {
+      labels: d.radar.labels,
+      datasets: [{
+        label: d.top_horse.name,
+        data: d.radar.values,
+        backgroundColor: 'rgba(45,155,86,0.2)',
+        borderColor: '#2d9b56',
+        borderWidth: 2,
+        pointBackgroundColor: '#2d9b56',
+        pointRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { r: { min: 0, max: 100, ticks: { stepSize: 25, font: { size: 9 } }, pointLabels: { font: { size: 10 } } } },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  document.getElementById('lastUpdated').textContent = '最終更新: ' + new Date().toLocaleTimeString('ja-JP');
+}
+
+async function loadRace() {
+  const raceId = document.getElementById('raceIdInput').value.trim();
+  if (!raceId) { showToast('レースIDを入力してください'); return; }
+
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div>予測計算中...</div>';
+
+  try {
+    const res = await fetch(`/api/race/${raceId}`);
+    const json = await res.json();
+    if (json.status !== 'ok') throw new Error(json.message);
+    renderPage(json.data);
+    showToast('✅ 予測完了！');
+  } catch(e) {
+    document.getElementById('content').innerHTML = `<div class="loading" style="color:var(--red)">⚠️ エラー: ${e.message}</div>`;
+  }
+}
+
+// 初回ロード
+loadRace();
+</script>
+</body>
+</html>
