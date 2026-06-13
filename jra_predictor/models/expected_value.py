@@ -18,9 +18,10 @@ logger = logging.getLogger(__name__)
 
 class ExpectedValueCalculator:
 
-    def __init__(self, win_predictor, place_predictor):
+    def __init__(self, win_predictor, place_predictor, ev_threshold_override: dict = None):
         self.win_pred = win_predictor
         self.place_pred = place_predictor
+        self.ev_threshold = {**EV_THRESHOLD, **(ev_threshold_override or {})}
 
     def recommend(
         self,
@@ -53,7 +54,7 @@ class ExpectedValueCalculator:
                     continue
                 p = prob_map[horse_num]["win"]
                 ev = p * horse_odds
-                if ev >= EV_THRESHOLD.get("tan", 1.20):
+                if ev >= self.ev_threshold.get("tan", 1.20):
                     stake = self._kelly_stake(p, horse_odds, budget)
                     recommendations.append({
                         "bet_type": "単勝",
@@ -73,7 +74,7 @@ class ExpectedValueCalculator:
                 # 複勝は最小オッズで計算（保守的）
                 min_odds = horse_odds if isinstance(horse_odds, float) else horse_odds.get("place_odds_min", 1.0)
                 ev = p * min_odds
-                if ev >= EV_THRESHOLD["fukusho"]:
+                if ev >= self.ev_threshold["fukusho"]:
                     stake = self._kelly_stake(p, min_odds, budget)
                     recommendations.append({
                         "bet_type": "複勝",
@@ -96,7 +97,7 @@ class ExpectedValueCalculator:
                 # 相関を考慮した近似
                 p_wide = p_i * p_j * (n / (n - 1)) * 0.5
                 ev = p_wide * horse_odds
-                if ev >= EV_THRESHOLD["wide"]:
+                if ev >= self.ev_threshold["wide"]:
                     stake = self._kelly_stake(p_wide, horse_odds, budget)
                     recommendations.append({
                         "bet_type": "ワイド",
@@ -122,7 +123,7 @@ class ExpectedValueCalculator:
                 p_i_2nd = prob_map[i]["place"] / max(sum(place_others_j), 1e-9)
                 p_umaren = p_i_win * p_j_2nd + p_j_win * p_i_2nd
                 ev = p_umaren * horse_odds
-                if ev >= EV_THRESHOLD["umaren"]:
+                if ev >= self.ev_threshold["umaren"]:
                     stake = self._kelly_stake(p_umaren, horse_odds, budget)
                     recommendations.append({
                         "bet_type": "馬連",
@@ -150,7 +151,7 @@ class ExpectedValueCalculator:
                     max(sum(v["place"] for v in prob_map.values()), 1e-9) ** 2 * 6
                 )
                 ev = p_trio * horse_odds
-                if ev >= EV_THRESHOLD["sanrenpuku"]:
+                if ev >= self.ev_threshold["sanrenpuku"]:
                     stake = self._kelly_stake(p_trio, horse_odds, budget)
                     recommendations.append({
                         "bet_type": "3連複",

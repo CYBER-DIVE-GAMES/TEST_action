@@ -23,6 +23,7 @@ class BacktestEngine:
         test_years: int = TEST_YEARS,
         budget_per_race: float = 10000,
         tune_hyperparams: bool = False,
+        ev_threshold_override: dict = None,
     ) -> dict:
         """
         過去N年をテスト期間として、前データで学習→テストデータで予測・集計
@@ -58,7 +59,7 @@ class BacktestEngine:
         logger.info(f"Place model - AUC: {place_eval['auc']:.4f}, LogLoss: {place_eval['logloss']:.4f}")
 
         # バックテスト本体
-        ev_calc = ExpectedValueCalculator(win_model, place_model)
+        ev_calc = ExpectedValueCalculator(win_model, place_model, ev_threshold_override)
         results = self._simulate(ev_calc, df_test, budget_per_race)
 
         report = self._calc_report(results)

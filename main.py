@@ -63,11 +63,31 @@ def cmd_backtest(args):
 
     db = Database()
     engine = BacktestEngine(db)
-    engine.run(
-        test_years=args.years,
-        budget_per_race=args.budget,
-        tune_hyperparams=False,
-    )
+
+    if args.sweep:
+        # EV閾値を段階的に変えて比較
+        thresholds = [1.30, 1.20, 1.10, 1.05, 1.00]
+        print("\n" + "="*70)
+        print("EV閾値スイープ（複勝）")
+        print(f"{'EV閾値':>8} {'ベット数':>8} {'的中率':>8} {'回収率':>8} {'収支':>12}")
+        print("-"*70)
+        for th in thresholds:
+            r = engine.run(
+                test_years=args.years,
+                budget_per_race=args.budget,
+                ev_threshold_override={"tan": th, "fukusho": th},
+            )
+            for bt in ["複勝", "単勝"]:
+                if bt in r:
+                    d = r[bt]
+                    print(f"  {bt} EV>{th:.2f}  {d['n_bets']:>8,}  {d['hit_rate']:>7.1f}%  {d['roi']:>7.1f}%  ¥{d['profit']:>+,}")
+        print("="*70)
+    else:
+        engine.run(
+            test_years=args.years,
+            budget_per_race=args.budget,
+            tune_hyperparams=False,
+        )
 
 
 def cmd_predict(args):
@@ -168,6 +188,7 @@ def main():
     p_bt = sub.add_parser("backtest", help="バックテスト実行")
     p_bt.add_argument("--years", type=int, default=2, help="テスト期間（年）")
     p_bt.add_argument("--budget", type=float, default=10000, help="1レースあたりの予算（円）")
+    p_bt.add_argument("--sweep", action="store_true", help="EV閾値を段階的に変えて比較")
 
     # scrape-odds
     p_odds = sub.add_parser("scrape-odds", help="過去レースのオッズをnetkeibaから収集")
