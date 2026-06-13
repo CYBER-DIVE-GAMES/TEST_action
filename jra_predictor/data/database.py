@@ -157,17 +157,31 @@ class Database:
             conn.execute(text(sql), info)
             conn.commit()
 
+    def _get_table_columns(self, table: str) -> set:
+        """テーブルの実際のカラム名一覧を取得"""
+        with self.engine.connect() as conn:
+            result = conn.execute(text(f"PRAGMA table_info({table})"))
+            return {row[1] for row in result}
+
     def upsert_race_results(self, df: pd.DataFrame):
         if df is None or df.empty:
             return
+        # DBの実際のカラムだけに絞る（スキーマ不一致エラーを防ぐ）
+        valid_cols = self._get_table_columns("race_results")
+        df = df[[c for c in df.columns if c in valid_cols]]
+        if df.empty:
+            return
         with self.engine.connect() as conn:
             for _, row in df.iterrows():
-                d = row.to_dict()
-                cols = [c for c in d if d[c] is not None]
+                d = {k: v for k, v in row.to_dict().items()
+                     if v is not None and str(v) != 'nan'}
+                if not d:
+                    continue
+                cols = list(d.keys())
                 placeholders = ", ".join(f":{c}" for c in cols)
                 col_str = ", ".join(cols)
                 sql = f"INSERT OR REPLACE INTO race_results ({col_str}) VALUES ({placeholders})"
-                conn.execute(text(sql), {c: d[c] for c in cols})
+                conn.execute(text(sql), d)
             conn.commit()
 
     def upsert_horse_profile(self, profile: dict):
