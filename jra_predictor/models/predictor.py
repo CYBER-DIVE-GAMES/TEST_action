@@ -106,8 +106,8 @@ class RacePredictor:
         brier_after = brier_score_loss(y_calib, calib_proba)
         logger.info(
             f"Calibration ({self.target}): "
-            f"Brier {brier_before:.4f} → {brier_after:.4f} "
-            f"({'改善' if brier_after < brier_before else '悪化'})"
+            f"Brier {brier_before:.4f} -> {brier_after:.4f} "
+            f"({'improved' if brier_after < brier_before else 'worsened'})"
         )
 
         self.feature_importance_ = pd.Series(
