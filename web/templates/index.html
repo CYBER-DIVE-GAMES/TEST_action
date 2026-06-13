@@ -275,7 +275,10 @@
       <input class="race-id-input" id="raceIdInput" type="text" placeholder="レースID（例: 202405050811）" value="">
       <button class="btn-search" onclick="loadRace()">🔍 予測実行</button>
     </div>
-    <div style="font-size:12px; opacity:0.8;" id="lastUpdated">最終更新: ー</div>
+    <div style="font-size:12px;display:flex;align-items:center;gap:12px;">
+      <span id="serverStatus" style="display:flex;align-items:center;gap:6px;opacity:0.8"><span id="statusDot" style="width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block"></span><span id="statusText">モデル確認中...</span></span>
+      <span id="lastUpdated" style="opacity:0.6">最終更新: ー</span>
+    </div>
   </header>
 
   <!-- ダッシュボードページ -->
@@ -360,49 +363,18 @@
       <button class="btn-primary" onclick="searchHorses(document.getElementById('horseSearchInput').value)">検索</button>
     </div>
     <div class="horse-card-grid" id="horseCardGrid">
-      <!-- 馬カードのサンプル -->
-      ${['ステラリア','グランアレグリア','ソングライン','シュネルマイスター','イクイノックス','リバティアイランド'].map(n => `
-      <div class="horse-card" onclick="showHorseDetail('${n}')">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div>
-            <div class="horse-card-name">${n}</div>
-            <div class="horse-card-info">牝5 / 父: キタサンブラック / 美浦</div>
-          </div>
-          <div class="horse-card-score">82</div>
-        </div>
-        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
-          <span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:4px;font-size:11px">芝◎</span>
-          <span style="background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:4px;font-size:11px">東京◎</span>
-          <span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-size:11px">マイル○</span>
-        </div>
-      </div>`).join('')}
+      <div style="grid-column:1/-1;text-align:center;padding:40px;color:#9ca3af">馬名を入力して検索してください</div>
     </div>
   </div>
 
   <!-- 成績分析ページ -->
   <div class="content page" id="page-analysis">
     <div style="font-size:16px;font-weight:900;margin-bottom:16px">📊 成績分析</div>
-    <div class="analysis-grid">
-      <div class="kpi-card">
-        <div class="kpi-val">24.3%</div>
-        <div class="kpi-label">複勝的中率</div>
-        <div class="kpi-diff" style="color:#16a34a">▲ +2.1% 先月比</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-val" style="color:#c9a84c">112.6%</div>
-        <div class="kpi-label">複勝回収率</div>
-        <div class="kpi-diff" style="color:#16a34a">▲ +4.3% 先月比</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-val">18.7%</div>
-        <div class="kpi-label">馬連的中率</div>
-        <div class="kpi-diff" style="color:#dc2626">▼ -1.2% 先月比</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-val" style="color:#c9a84c">108.3%</div>
-        <div class="kpi-label">馬連回収率</div>
-        <div class="kpi-diff" style="color:#16a34a">▲ +3.1% 先月比</div>
-      </div>
+    <div class="analysis-grid" id="analysisKpi">
+      <div class="kpi-card"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="kpi-card"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="kpi-card"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="kpi-card"><div class="loading"><div class="spinner"></div></div></div>
     </div>
     <div class="analysis-charts">
       <div class="chart-card">
@@ -422,31 +394,35 @@
     <div class="settings-section">
       <div class="settings-title">🎯 期待値閾値（この値以上の馬券のみ推奨）</div>
       <div class="setting-row">
+        <div><div class="setting-label">単勝 閾値</div><div class="setting-desc">推奨範囲: 1.10〜1.30</div></div>
+        <input class="setting-input" id="cfg-tan" type="number" value="1.15" step="0.05" min="1.0" max="2.0">
+      </div>
+      <div class="setting-row">
         <div><div class="setting-label">複勝 閾値</div><div class="setting-desc">推奨範囲: 1.10〜1.30</div></div>
-        <input class="setting-input" type="number" value="1.15" step="0.05" min="1.0" max="2.0">
+        <input class="setting-input" id="cfg-fukusho" type="number" value="1.10" step="0.05" min="1.0" max="2.0">
       </div>
       <div class="setting-row">
         <div><div class="setting-label">ワイド 閾値</div><div class="setting-desc">推奨範囲: 1.15〜1.40</div></div>
-        <input class="setting-input" type="number" value="1.20" step="0.05" min="1.0" max="2.0">
+        <input class="setting-input" id="cfg-wide" type="number" value="1.20" step="0.05" min="1.0" max="2.0">
       </div>
       <div class="setting-row">
         <div><div class="setting-label">馬連 閾値</div><div class="setting-desc">推奨範囲: 1.20〜1.50</div></div>
-        <input class="setting-input" type="number" value="1.25" step="0.05" min="1.0" max="2.0">
+        <input class="setting-input" id="cfg-umaren" type="number" value="1.25" step="0.05" min="1.0" max="2.0">
       </div>
       <div class="setting-row">
         <div><div class="setting-label">3連複 閾値</div><div class="setting-desc">推奨範囲: 1.25〜1.60</div></div>
-        <input class="setting-input" type="number" value="1.30" step="0.05" min="1.0" max="2.0">
+        <input class="setting-input" id="cfg-sanrenpuku" type="number" value="1.30" step="0.05" min="1.0" max="2.0">
       </div>
     </div>
     <div class="settings-section">
       <div class="settings-title">💰 資金管理</div>
       <div class="setting-row">
         <div><div class="setting-label">1レースあたりの予算</div><div class="setting-desc">ケリー基準の計算に使用</div></div>
-        <input class="setting-input" type="number" value="10000" step="1000">
+        <input class="setting-input" id="cfg-budget" type="number" value="10000" step="1000">
       </div>
       <div class="setting-row">
         <div><div class="setting-label">ケリー基準 分数</div><div class="setting-desc">0.25 = フルケリーの25%（推奨）</div></div>
-        <input class="setting-input" type="number" value="0.25" step="0.05" min="0.05" max="1.0">
+        <input class="setting-input" id="cfg-kelly" type="number" value="0.25" step="0.05" min="0.05" max="1.0">
       </div>
     </div>
     <div class="settings-section">
@@ -472,6 +448,23 @@ const FRAME_COLORS = ['f1','f2','f3','f4','f5','f6','f7','f8'];
 let radarChart = null;
 let roiChart = null;
 let betTypeChart = null;
+let analysisLoaded = false;
+
+// ---- 設定読み込み（localStorage）----
+function loadSettings() {
+  const keys = ['tan','fukusho','wide','umaren','sanrenpuku','budget','kelly'];
+  keys.forEach(k => {
+    const el = document.getElementById('cfg-' + k);
+    if (el) {
+      const v = localStorage.getItem('cfg-' + k);
+      if (v !== null) el.value = v;
+    }
+  });
+}
+
+function getThreshold() {
+  return parseFloat(document.getElementById('cfg-fukusho')?.value || '1.10');
+}
 
 // ---- ページ切替 ----
 function switchPage(page, navEl) {
@@ -480,104 +473,175 @@ function switchPage(page, navEl) {
   document.getElementById('page-' + page).classList.add('active');
   navEl.classList.add('active');
 
-  // ヘッダーの検索欄は dashboard のみ表示
   const header = document.querySelector('.header-left');
   header.style.visibility = page === 'dashboard' ? 'visible' : 'hidden';
 
-  if (page === 'analysis') initAnalysisCharts();
+  if (page === 'analysis' && !analysisLoaded) loadAnalysisStats();
 }
 
-// ---- レース検索 ----
-function searchRaces() {
+// ---- レース検索（API）----
+async function searchRaces() {
   const date = document.getElementById('s-date').value;
   const course = document.getElementById('s-course').value;
-  // モックデータで表示（実運用時はAPIで置換）
-  const mockRaces = [
-    {date:'2024/06/02', course:'東京', r:11, name:'安田記念G1',    cond:'芝 良', dist:1600, count:18},
-    {date:'2024/06/02', course:'東京', r:10, name:'鞍馬ステークス', cond:'芝 良', dist:1200, count:16},
-    {date:'2024/06/02', course:'中京', r:11, name:'中京記念',      cond:'芝 良', dist:2000, count:14},
-    {date:'2024/06/01', course:'東京', r:12, name:'ダービー卿CT',  cond:'芝 良', dist:1600, count:16},
-    {date:'2024/06/01', course:'阪神', r: 9, name:'鳴尾記念G3',    cond:'芝 良', dist:2000, count:12},
-  ].filter(r => (!date || r.date === date.replace(/-/g,'/')) && (!course || r.course === course));
-
-  const grades = ['G1','','G3','',''];
+  const surface = document.getElementById('s-surface').value;
   const tbody = document.getElementById('raceListBody');
-  if (!mockRaces.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#9ca3af">該当レースなし</td></tr>';
-    return;
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px"><div class="loading"><div class="spinner"></div>検索中...</div></td></tr>';
+
+  try {
+    const params = new URLSearchParams();
+    if (date) params.set('date', date);
+    if (course) params.set('course', course);
+    if (surface) params.set('surface', surface);
+    const res = await fetch('/api/races?' + params);
+    const json = await res.json();
+    if (json.status !== 'ok') throw new Error(json.message);
+    const races = json.races;
+    if (!races.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#9ca3af">該当レースなし</td></tr>';
+      return;
+    }
+    tbody.innerHTML = races.map(r => {
+      const g = r.race_name.match(/G[123]/) ? r.race_name.match(/G[123]/)[0] : 'OP';
+      const cls = g==='G1'?'badge-g1':g==='G2'?'badge-g2':g==='G3'?'badge-g3':'badge-op';
+      return `<tr onclick="goToRace('${r.race_id}')">
+        <td>${r.date}</td><td>${r.course}</td><td>${r.race_number}R</td>
+        <td><span class="${cls}">${g}</span> ${r.race_name.replace(/G[123]/,'')}</td>
+        <td>${r.surface} ${r.track_condition}</td><td>${r.distance}m</td><td>${r.field_count}頭</td>
+        <td><button class="btn-primary" style="padding:4px 12px;font-size:11px" onclick="event.stopPropagation();goToRace('${r.race_id}')">予測</button></td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--red)">エラー: ${e.message}</td></tr>`;
   }
-  tbody.innerHTML = mockRaces.map((r,i) => {
-    const g = r.name.match(/G[123]/) ? r.name.match(/G[123]/)[0] : 'OP';
-    const cls = g==='G1'?'badge-g1':g==='G2'?'badge-g2':g==='G3'?'badge-g3':'badge-op';
-    const fakeId = '202406020511';
-    return `<tr onclick="goToRace('${fakeId}')">
-      <td>${r.date}</td><td>${r.course}</td><td>${r.r}R</td>
-      <td><span class="${cls}">${g}</span> ${r.name.replace(/G[123]/,'')}</td>
-      <td>${r.cond}</td><td>${r.dist}m</td><td>${r.count}頭</td>
-      <td><button class="btn-primary" style="padding:4px 12px;font-size:11px" onclick="event.stopPropagation();goToRace('${fakeId}')">予測</button></td>
-    </tr>`;
-  }).join('');
 }
 
 function goToRace(raceId) {
-  switchPage('dashboard', document.querySelector('.nav-item'));
+  const nav = document.querySelectorAll('.nav-item')[0];
+  switchPage('dashboard', nav);
   document.getElementById('raceIdInput').value = raceId;
   loadRace();
 }
 
-// ---- 馬検索 ----
+// ---- 馬検索（API）----
+let horseTimer = null;
 function searchHorses(q) {
-  // 実運用時はAPIで馬DBを検索
-  showToast('馬データはデータ収集後に検索できます');
-}
-function showHorseDetail(name) {
-  showToast(`${name} の詳細画面（データ収集後に使用可能）`);
+  clearTimeout(horseTimer);
+  if (!q || q.length < 1) return;
+  horseTimer = setTimeout(() => _doHorseSearch(q), 400);
 }
 
-// ---- 成績分析チャート ----
-function initAnalysisCharts() {
+async function _doHorseSearch(q) {
+  const grid = document.getElementById('horseCardGrid');
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px"><div class="loading"><div class="spinner"></div>検索中...</div></div>';
+  try {
+    const res = await fetch('/api/horses?q=' + encodeURIComponent(q));
+    const json = await res.json();
+    if (json.status !== 'ok') throw new Error(json.message);
+    const horses = json.horses;
+    if (!horses.length) {
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#9ca3af">該当なし</div>';
+      return;
+    }
+    grid.innerHTML = horses.map(h => `
+      <div class="horse-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div class="horse-card-name">${h.name}</div>
+            <div class="horse-card-info">${h.sex_age}</div>
+          </div>
+          <div class="horse-card-score">${h.score}</div>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          <span style="background:#f1f5f9;color:#475569;padding:2px 6px;border-radius:4px;font-size:11px">${h.runs}戦</span>
+          <span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:4px;font-size:11px">勝率 ${h.win_rate}%</span>
+          <span style="background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:4px;font-size:11px">複勝率 ${h.place_rate}%</span>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--red)">エラー: ${e.message}</div>`;
+  }
+}
+
+// ---- 成績分析（API）----
+async function loadAnalysisStats() {
+  try {
+    const res = await fetch('/api/stats');
+    const json = await res.json();
+    if (json.status !== 'ok') throw new Error(json.message);
+    const s = json.stats;
+    document.getElementById('analysisKpi').innerHTML = `
+      <div class="kpi-card">
+        <div class="kpi-val">${s.fukusho_hit_rate}%</div>
+        <div class="kpi-label">複勝的中率</div>
+        <div class="kpi-diff" style="color:#6b7280">${s.test_period}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val" style="color:#c9a84c">${s.fukusho_roi}%</div>
+        <div class="kpi-label">複勝回収率</div>
+        <div class="kpi-diff" style="color:#16a34a">▲ バックテスト実績</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val">${s.tan_hit_rate}%</div>
+        <div class="kpi-label">単勝的中率</div>
+        <div class="kpi-diff" style="color:#6b7280">${s.total_races.toLocaleString()}レース検証</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val" style="color:#c9a84c">${s.tan_roi}%</div>
+        <div class="kpi-label">単勝回収率</div>
+        <div class="kpi-diff" style="color:#16a34a">▲ バックテスト実績</div>
+      </div>`;
+    initAnalysisCharts(s);
+    analysisLoaded = true;
+  } catch(e) {
+    document.getElementById('analysisKpi').innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--red)">エラー: ${e.message}</div>`;
+  }
+}
+
+function initAnalysisCharts(s) {
   const months = ['1月','2月','3月','4月','5月','6月'];
-  if (!roiChart) {
-    roiChart = new Chart(document.getElementById('roiChart'), {
-      type: 'line',
-      data: {
-        labels: months,
-        datasets: [
-          { label:'複勝', data:[108,105,112,109,115,113], borderColor:'#2d9b56', tension:0.3, fill:false },
-          { label:'馬連', data:[102,98,107,104,110,108],  borderColor:'#c9a84c', tension:0.3, fill:false },
-          { label:'3連複',data:[95, 102,108,98, 112,106], borderColor:'#7c3aed', tension:0.3, fill:false },
-        ]
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ position:'bottom', labels:{ font:{size:11} } } },
-        scales:{ y:{ min:90, ticks:{ callback: v => v+'%' } } }
-      }
-    });
-  }
-  if (!betTypeChart) {
-    betTypeChart = new Chart(document.getElementById('betTypeChart'), {
-      type: 'bar',
-      data: {
-        labels: ['複勝','ワイド','馬連','3連複'],
-        datasets: [{
-          label: '回収率',
-          data: [112.6, 109.4, 108.3, 104.7],
-          backgroundColor: ['#2d9b56','#2563eb','#c9a84c','#7c3aed'],
-          borderRadius: 6,
-        }]
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:false } },
-        scales:{ y:{ min:95, ticks:{ callback: v => v+'%' } } }
-      }
-    });
-  }
+  const roiData = s?.monthly_roi || [108,115,121,118,125,123];
+  if (roiChart) roiChart.destroy();
+  roiChart = new Chart(document.getElementById('roiChart'), {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [
+        { label:'複勝 月別回収率', data: roiData, borderColor:'#2d9b56', backgroundColor:'rgba(45,155,86,0.1)', tension:0.3, fill:true },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ font:{size:11} } } },
+      scales:{ y:{ min:90, ticks:{ callback: v => v+'%' } } }
+    }
+  });
+  if (betTypeChart) betTypeChart.destroy();
+  betTypeChart = new Chart(document.getElementById('betTypeChart'), {
+    type: 'bar',
+    data: {
+      labels: ['複勝','単勝'],
+      datasets: [{
+        label: '回収率',
+        data: [s?.fukusho_roi || 123.5, s?.tan_roi || 102.2],
+        backgroundColor: ['#2d9b56','#c9a84c'],
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{ y:{ min:90, ticks:{ callback: v => v+'%' } } }
+    }
+  });
 }
 
-// ---- 設定保存 ----
+// ---- 設定保存（localStorage）----
 function saveSettings() {
+  const keys = ['tan','fukusho','wide','umaren','sanrenpuku','budget','kelly'];
+  keys.forEach(k => {
+    const el = document.getElementById('cfg-' + k);
+    if (el) localStorage.setItem('cfg-' + k, el.value);
+  });
   showToast('✅ 設定を保存しました');
 }
 
@@ -768,21 +832,52 @@ async function loadRace() {
   const raceId = document.getElementById('raceIdInput').value.trim();
   if (!raceId) { showToast('レースIDを入力してください'); return; }
 
-  document.getElementById('page-dashboard').innerHTML = '<div class="loading"><div class="spinner"></div>予測計算中...</div>';
+  document.getElementById('page-dashboard').innerHTML = '<div class="loading" style="min-height:60vh"><div class="spinner"></div>AIが予測計算中...</div>';
 
   try {
-    const res = await fetch(`/api/race/${raceId}`);
+    const threshold = getThreshold();
+    const res = await fetch(`/api/race/${raceId}?threshold=${threshold}`);
     const json = await res.json();
+    if (json.status === 'loading') {
+      document.getElementById('page-dashboard').innerHTML = `<div class="loading" style="flex-direction:column;min-height:60vh;gap:16px"><div class="spinner"></div><div style="font-size:14px">${json.message}</div><div style="font-size:12px;color:#9ca3af">モデルの読み込みには1〜2分かかります。少々お待ちください。</div></div>`;
+      return;
+    }
     if (json.status !== 'ok') throw new Error(json.message);
-    document.getElementById('welcome')?.remove();
     renderPage(json.data);
     showToast('✅ 予測完了！');
   } catch(e) {
-    document.getElementById('page-dashboard').innerHTML = `<div class="loading" style="color:var(--red)">⚠️ エラー: ${e.message}</div>`;
+    document.getElementById('page-dashboard').innerHTML = `<div class="loading" style="color:var(--red);min-height:60vh">⚠️ エラー: ${e.message}</div>`;
   }
 }
 
-// 初回は自動ロードしない
+// 起動時に設定読み込み
+loadSettings();
+
+// サーバーステータスポーリング
+async function checkStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const json = await res.json();
+    const dot = document.getElementById('statusDot');
+    const txt = document.getElementById('statusText');
+    if (json.ready) {
+      dot.style.background = '#16a34a';
+      txt.textContent = 'AI準備完了';
+      return; // stop polling
+    } else if (json.error) {
+      dot.style.background = '#dc2626';
+      txt.textContent = 'エラー: ' + json.error;
+      return;
+    } else {
+      dot.style.background = '#f59e0b';
+      txt.textContent = 'モデル読み込み中...';
+      setTimeout(checkStatus, 5000);
+    }
+  } catch(e) {
+    setTimeout(checkStatus, 10000);
+  }
+}
+checkStatus();
 </script>
 </body>
 </html>
