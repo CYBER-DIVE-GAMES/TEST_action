@@ -22,13 +22,34 @@ class FeatureBuilder:
         df_info = self.db.read_table("race_info")
         df_horse = self.db.read_table("horse_profile")
 
-        if df_result.empty or df_info.empty:
-            logger.error("No data in DB. Run data collection first.")
+        if df_result.empty:
+            logger.error("No data in DB. Run data import first.")
             return pd.DataFrame()
 
-        df = df_result.merge(df_info, on="race_id", how="left")
-        df = df.merge(df_horse[["horse_id", "sire", "dam_sire", "birth_date"]],
-                      on="horse_id", how="left")
+        # race_infoが空でも動くようにする
+        if not df_info.empty:
+            # 重複カラムを避けるため、race_infoから追加する列だけ選ぶ
+            info_extra = [c for c in df_info.columns
+                          if c not in df_result.columns or c == "race_id"]
+            df = df_result.merge(df_info[info_extra], on="race_id", how="left")
+        else:
+            df = df_result.copy()
+
+        # horse_profileが空でも動くようにする
+        if not df_horse.empty and "horse_id" in df.columns:
+            horse_cols = ["horse_id"] + [c for c in ["sire","dam_sire","birth_date"]
+                                          if c in df_horse.columns]
+            df = df.merge(df_horse[horse_cols], on="horse_id", how="left")
+
+        # dateカラムの確保（race_resultsかrace_infoどちらかにある）
+        if "date" not in df.columns:
+            if "date_x" in df.columns:
+                df["date"] = df["date_x"]
+            elif "date_y" in df.columns:
+                df["date"] = df["date_y"]
+            else:
+                logger.error("dateカラムが見つかりません")
+                return pd.DataFrame()
 
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
         df = df.sort_values(["date", "race_id", "horse_number"]).reset_index(drop=True)
