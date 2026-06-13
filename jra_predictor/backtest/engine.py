@@ -55,8 +55,8 @@ class BacktestEngine:
         # 評価
         win_eval = win_model.evaluate(df_test)
         place_eval = place_model.evaluate(df_test)
-        logger.info(f"Win model  - AUC: {win_eval['auc']:.4f}, LogLoss: {win_eval['logloss']:.4f}")
-        logger.info(f"Place model - AUC: {place_eval['auc']:.4f}, LogLoss: {place_eval['logloss']:.4f}")
+        logger.info(f"Win model  - AUC: {win_eval['auc']:.4f}, LogLoss: {win_eval['logloss']:.4f}, Brier: {win_eval['brier']:.4f}")
+        logger.info(f"Place model - AUC: {place_eval['auc']:.4f}, LogLoss: {place_eval['logloss']:.4f}, Brier: {place_eval['brier']:.4f}")
 
         # バックテスト本体
         ev_calc = ExpectedValueCalculator(win_model, place_model, ev_threshold_override)
