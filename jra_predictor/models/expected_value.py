@@ -46,6 +46,24 @@ class ExpectedValueCalculator:
 
         recommendations = []
 
+        # ---- 単勝 ----
+        if "tan" in odds_dict and odds_dict["tan"]:
+            for horse_num, horse_odds in odds_dict["tan"].items():
+                if horse_num not in prob_map:
+                    continue
+                p = prob_map[horse_num]["win"]
+                ev = p * horse_odds
+                if ev >= EV_THRESHOLD.get("tan", 1.20):
+                    stake = self._kelly_stake(p, horse_odds, budget)
+                    recommendations.append({
+                        "bet_type": "単勝",
+                        "combination": str(horse_num),
+                        "probability": round(p, 4),
+                        "odds": horse_odds,
+                        "expected_value": round(ev, 3),
+                        "stake": int(stake),
+                    })
+
         # ---- 複勝 ----
         if "fukusho" in odds_dict:
             for horse_num, horse_odds in odds_dict["fukusho"].items():

@@ -59,7 +59,7 @@ class BacktestEngine:
 
         # バックテスト本体
         ev_calc = ExpectedValueCalculator(win_model, place_model)
-        results = self._simulate(ev_calc, df_test, budget_per_race)
+        results = self._simulate(ev_calc, df_test, budget_per_race, use_df_odds=True)
 
         report = self._calc_report(results)
         self._print_report(report)
@@ -70,6 +70,7 @@ class BacktestEngine:
         ev_calc: ExpectedValueCalculator,
         df_test: pd.DataFrame,
         budget: float,
+        use_df_odds: bool = False,
     ) -> list[dict]:
         """テスト期間の全レースをシミュレート"""
         records = []
@@ -80,7 +81,10 @@ class BacktestEngine:
             if len(df_race) < 3:
                 continue
 
-            odds = self._get_odds_for_race(race_id)
+            if use_df_odds:
+                odds = self._build_odds_from_df(df_race)
+            else:
+                odds = self._get_odds_for_race(race_id)
             if not any(odds.values()):
                 continue
 
@@ -110,6 +114,22 @@ class BacktestEngine:
 
         return records
 
+    @staticmethod
+    def _build_odds_from_df(df_race: pd.DataFrame) -> dict:
+        """race_resultsのwin_oddsから馬券オッズを構築（odds_rawがない場合のフォールバック）"""
+        result = {"tan": {}, "fukusho": {}}
+        if "win_odds" not in df_race.columns or "horse_number" not in df_race.columns:
+            return result
+        for _, row in df_race.iterrows():
+            h = int(row["horse_number"])
+            wo = float(row["win_odds"]) if pd.notna(row["win_odds"]) else np.nan
+            if np.isnan(wo) or wo <= 0:
+                continue
+            result["tan"][h] = wo
+            # 複勝オッズの簡易推定: 単勝オッズが低いほど複勝も低い
+            result["fukusho"][h] = max(1.1, round(wo * 0.28 + 1.05, 1))
+        return result
+
     def _get_odds_for_race(self, race_id: str) -> dict:
         """DBからオッズ取得・パース"""
         df_odds = self.db.read_table("odds_raw", f"race_id = '{race_id}'")
@@ -133,7 +153,9 @@ class BacktestEngine:
     @staticmethod
     def _is_hit(bet_type: str, combination: str, top3: set, winner) -> bool:
         parts = [int(x) for x in combination.split("-")]
-        if bet_type == "複勝":
+        if bet_type == "単勝":
+            return parts[0] == winner
+        elif bet_type == "複勝":
             return parts[0] in top3
         elif bet_type == "ワイド":
             return parts[0] in top3 and parts[1] in top3
