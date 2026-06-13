@@ -129,6 +129,18 @@ class KaggleJraImporter:
         df["is_win"]   = (df["finish_order"] == 1).astype(int)
         df["is_place"] = (df["finish_order"] <= 3).astype(int)
 
+        # DBに保存するカラムだけ残す（スラッシュ・括弧などの特殊文字カラムを除外）
+        keep_cols = [
+            "race_id", "date", "course", "course_code", "race_number", "race_name",
+            "distance", "surface", "weather", "track_condition",
+            "finish_order", "frame_number", "horse_number", "horse_name",
+            "sex_age", "weight_carried", "jockey_name", "finish_time_sec",
+            "margin", "passing_order", "last_3f", "win_odds", "popularity",
+            "horse_weight", "horse_weight_diff", "trainer_name", "owner", "prize",
+            "is_win", "is_place",
+        ]
+        df = df[[c for c in keep_cols if c in df.columns]]
+
         return df
 
     def _save_race_info(self, df: pd.DataFrame):
