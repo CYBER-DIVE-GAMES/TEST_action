@@ -123,6 +123,18 @@ def cmd_predict(args):
         print("推奨馬券なし（期待値閾値を超える馬券が見つかりませんでした）")
 
 
+def cmd_scrape_odds(args):
+    from jra_predictor.data import Database
+    from jra_predictor.scraper import OddsCollector
+    db = Database()
+    collector = OddsCollector(db)
+    collector.collect(
+        start_year=args.start,
+        end_year=args.end,
+        limit=args.limit,
+    )
+
+
 def cmd_import(args):
     from jra_predictor.data import Database
     from jra_predictor.data.kaggle_importer import KaggleJraImporter
@@ -157,6 +169,12 @@ def main():
     p_bt.add_argument("--years", type=int, default=2, help="テスト期間（年）")
     p_bt.add_argument("--budget", type=float, default=10000, help="1レースあたりの予算（円）")
 
+    # scrape-odds
+    p_odds = sub.add_parser("scrape-odds", help="過去レースのオッズをnetkeibaから収集")
+    p_odds.add_argument("--start", type=int, default=2019, help="開始年")
+    p_odds.add_argument("--end", type=int, default=2021, help="終了年")
+    p_odds.add_argument("--limit", type=int, default=0, help="件数制限（0=全件、50等で動作確認可）")
+
     # import
     p_imp = sub.add_parser("import", help="CSVからデータをインポート")
     p_imp.add_argument("path", help="CSVファイルまたはフォルダのパス")
@@ -168,7 +186,9 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "import":
+    if args.command == "scrape-odds":
+        cmd_scrape_odds(args)
+    elif args.command == "import":
         cmd_import(args)
     elif args.command == "collect":
         cmd_collect(args)

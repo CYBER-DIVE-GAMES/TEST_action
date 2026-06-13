@@ -59,7 +59,7 @@ class BacktestEngine:
 
         # バックテスト本体
         ev_calc = ExpectedValueCalculator(win_model, place_model)
-        results = self._simulate(ev_calc, df_test, budget_per_race, use_df_odds=True)
+        results = self._simulate(ev_calc, df_test, budget_per_race)
 
         report = self._calc_report(results)
         self._print_report(report)
@@ -70,7 +70,6 @@ class BacktestEngine:
         ev_calc: ExpectedValueCalculator,
         df_test: pd.DataFrame,
         budget: float,
-        use_df_odds: bool = False,
     ) -> list[dict]:
         """テスト期間の全レースをシミュレート"""
         records = []
@@ -81,10 +80,10 @@ class BacktestEngine:
             if len(df_race) < 3:
                 continue
 
-            if use_df_odds:
+            # 実データ優先、なければdf推定値にフォールバック
+            odds = self._get_odds_for_race(race_id)
+            if not any(odds.values()):
                 odds = self._build_odds_from_df(df_race)
-            else:
-                odds = self._get_odds_for_race(race_id)
             if not any(odds.values()):
                 continue
 
