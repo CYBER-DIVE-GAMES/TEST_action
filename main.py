@@ -123,6 +123,20 @@ def cmd_predict(args):
         print("推奨馬券なし（期待値閾値を超える馬券が見つかりませんでした）")
 
 
+def cmd_import(args):
+    from jra_predictor.data import Database
+    from jra_predictor.data.csv_importer import CsvImporter
+    db = Database()
+    importer = CsvImporter(db)
+    from pathlib import Path
+    p = Path(args.path)
+    if p.is_dir():
+        importer.import_folder(args.path)
+    else:
+        importer.import_race_results(args.path)
+    logger.info("インポート完了")
+
+
 def main():
     parser = argparse.ArgumentParser(description="JRA 中央競馬 予想ツール")
     sub = parser.add_subparsers(dest="command")
@@ -143,6 +157,10 @@ def main():
     p_bt.add_argument("--years", type=int, default=2, help="テスト期間（年）")
     p_bt.add_argument("--budget", type=float, default=10000, help="1レースあたりの予算（円）")
 
+    # import
+    p_imp = sub.add_parser("import", help="CSVからデータをインポート")
+    p_imp.add_argument("path", help="CSVファイルまたはフォルダのパス")
+
     # predict
     p_pred = sub.add_parser("predict", help="直近レース予測")
     p_pred.add_argument("race_ids", nargs="+", help="レースID（12桁）")
@@ -150,7 +168,9 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "collect":
+    if args.command == "import":
+        cmd_import(args)
+    elif args.command == "collect":
         cmd_collect(args)
     elif args.command == "train":
         cmd_train(args)
