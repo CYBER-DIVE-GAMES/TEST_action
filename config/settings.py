@@ -33,8 +33,8 @@ BET_TYPES = ["fukusho", "wide", "umaren", "sanrenpuku"]
 
 # 期待値閾値（この値以上の馬券のみ購入推奨）
 EV_THRESHOLD = {
-    "tan": 1.20,
-    "fukusho": 1.15,
+    "tan": 1.15,
+    "fukusho": 1.10,
     "wide": 1.20,
     "umaren": 1.25,
     "sanrenpuku": 1.30,

@@ -125,8 +125,9 @@ class BacktestEngine:
             if np.isnan(wo) or wo <= 0:
                 continue
             result["tan"][h] = wo
-            # 複勝オッズの簡易推定: 単勝オッズが低いほど複勝も低い
-            result["fukusho"][h] = max(1.1, round(wo * 0.28 + 1.05, 1))
+            # 複勝オッズ推定: べき乗式（実際の複勝オッズに近い近似）
+            # 低オッズ馬は控えめに、高オッズ馬は減衰させる
+            result["fukusho"][h] = max(1.1, round(wo ** 0.6 * 0.75, 1))
         return result
 
     def _get_odds_for_race(self, race_id: str) -> dict:
