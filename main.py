@@ -143,6 +143,49 @@ def cmd_predict(args):
         print("推奨馬券なし（期待値閾値を超える馬券が見つかりませんでした）")
 
 
+def cmd_list_races(args):
+    """今日または指定日のレースID一覧を生成して表示"""
+    from datetime import date, timedelta
+
+    # 日付決定
+    if args.date:
+        d = date.fromisoformat(args.date)
+    elif args.tomorrow:
+        d = date.today() + timedelta(days=1)
+    else:
+        d = date.today()
+
+    date_str = d.strftime("%Y%m%d")
+
+    # JRA開催場コード（中央10場）
+    course_codes = ["01","02","03","04","05","06","07","08","09","10"]
+
+    print(f"\n{d.strftime('%Y年%m月%d日')} のレースID候補")
+    print("（実際に開催されているレースのみ有効）")
+    print("="*50)
+
+    all_ids = []
+    for cc in course_codes:
+        for r in range(1, 13):  # 1〜12レース
+            race_id = f"{date_str}{cc}{r:02d}"
+            all_ids.append(race_id)
+
+    # predict用にスペース区切りで表示
+    print("\n【競馬場別】")
+    course_names = {
+        "01":"札幌","02":"函館","03":"福島","04":"新潟",
+        "05":"東京","06":"中山","07":"中京","08":"京都",
+        "09":"阪神","10":"小倉"
+    }
+    for cc in course_codes:
+        ids = [f"{date_str}{cc}{r:02d}" for r in range(1, 13)]
+        print(f"  {course_names[cc]}({cc}): {ids[0]} 〜 {ids[-1]}")
+
+    print(f"\n【全レース予測コマンド例（東京開催の場合）】")
+    tokyo_ids = " ".join([f"{date_str}0501", f"{date_str}0506", f"{date_str}0511"])
+    print(f"  python main.py predict {date_str}0501 {date_str}0502 ... {date_str}0512")
+
+
 def cmd_scrape_odds(args):
     from jra_predictor.data import Database
     from jra_predictor.scraper import OddsCollector
@@ -190,6 +233,11 @@ def main():
     p_bt.add_argument("--budget", type=float, default=10000, help="1レースあたりの予算（円）")
     p_bt.add_argument("--sweep", action="store_true", help="EV閾値を段階的に変えて比較")
 
+    # list-races
+    p_list = sub.add_parser("list-races", help="今日のレースID一覧を表示")
+    p_list.add_argument("--date", type=str, default="", help="日付指定 YYYY-MM-DD（省略時:今日）")
+    p_list.add_argument("--tomorrow", action="store_true", help="明日のレースを表示")
+
     # scrape-odds
     p_odds = sub.add_parser("scrape-odds", help="過去レースのオッズをnetkeibaから収集")
     p_odds.add_argument("--start", type=int, default=2019, help="開始年")
@@ -207,7 +255,9 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "scrape-odds":
+    if args.command == "list-races":
+        cmd_list_races(args)
+    elif args.command == "scrape-odds":
         cmd_scrape_odds(args)
     elif args.command == "import":
         cmd_import(args)
