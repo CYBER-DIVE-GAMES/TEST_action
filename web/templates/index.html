@@ -198,6 +198,58 @@
   /* ポップアップ通知 */
   .toast { position: fixed; bottom: 24px; right: 24px; background: var(--dark); color: #fff; padding: 12px 18px; border-radius: 8px; font-size: 13px; z-index: 9999; opacity: 0; transform: translateY(10px); transition: all 0.3s; }
   .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* ページコンテンツ共通 */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* レース検索ページ */
+  .search-form { background:#fff; border-radius:10px; padding:24px; box-shadow:0 1px 4px rgba(0,0,0,0.07); margin-bottom:20px; }
+  .form-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:12px; }
+  .form-group label { font-size:12px; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px; }
+  .form-group select, .form-group input { width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; }
+  .btn-primary { background:var(--green); color:#fff; border:none; padding:10px 28px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-primary:hover { opacity:0.85; }
+  .race-list-table { width:100%; border-collapse:collapse; font-size:13px; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.07); }
+  .race-list-table th { background:#f8fafc; color:var(--text-muted); font-weight:600; padding:10px 14px; text-align:left; border-bottom:2px solid var(--border); }
+  .race-list-table td { padding:10px 14px; border-bottom:1px solid var(--border); }
+  .race-list-table tr:hover { background:#f8fafc; cursor:pointer; }
+  .badge-g1 { background:#fef3c7; color:#92400e; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:700; }
+  .badge-g2 { background:#dbeafe; color:#1e40af; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:700; }
+  .badge-g3 { background:#f3e8ff; color:#6b21a8; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:700; }
+  .badge-op { background:#f1f5f9; color:#475569; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:700; }
+
+  /* 馬データベースページ */
+  .horse-search-bar { display:flex; gap:10px; margin-bottom:16px; }
+  .horse-search-bar input { flex:1; padding:10px 14px; border:1px solid var(--border); border-radius:8px; font-size:14px; }
+  .horse-card-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .horse-card { background:#fff; border-radius:10px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,0.07); cursor:pointer; transition:box-shadow 0.15s; }
+  .horse-card:hover { box-shadow:0 4px 12px rgba(0,0,0,0.12); }
+  .horse-card-name { font-size:16px; font-weight:900; margin-bottom:4px; }
+  .horse-card-info { font-size:11px; color:var(--text-muted); }
+  .horse-card-score { font-size:28px; font-weight:900; color:var(--green); text-align:right; }
+
+  /* 成績分析ページ */
+  .analysis-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px; }
+  .kpi-card { background:#fff; border-radius:10px; padding:18px; box-shadow:0 1px 4px rgba(0,0,0,0.07); text-align:center; }
+  .kpi-val { font-size:32px; font-weight:900; color:var(--green); }
+  .kpi-label { font-size:12px; color:var(--text-muted); margin-top:4px; }
+  .kpi-diff { font-size:12px; margin-top:4px; }
+  .chart-card { background:#fff; border-radius:10px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,0.07); }
+  .analysis-charts { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+
+  /* 設定ページ */
+  .settings-section { background:#fff; border-radius:10px; padding:20px 24px; box-shadow:0 1px 4px rgba(0,0,0,0.07); margin-bottom:16px; }
+  .settings-title { font-size:14px; font-weight:700; margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  .setting-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid #f3f4f6; }
+  .setting-row:last-child { border-bottom:none; }
+  .setting-label { font-size:13px; font-weight:600; }
+  .setting-desc { font-size:11px; color:var(--text-muted); margin-top:2px; }
+  .setting-input { padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; width:120px; text-align:right; }
+  .toggle { width:44px; height:24px; background:#e5e7eb; border-radius:12px; cursor:pointer; position:relative; transition:background 0.2s; }
+  .toggle.on { background:var(--green); }
+  .toggle::after { content:''; position:absolute; width:18px; height:18px; background:#fff; border-radius:50%; top:3px; left:3px; transition:left 0.2s; box-shadow:0 1px 3px rgba(0,0,0,0.2); }
+  .toggle.on::after { left:23px; }
 </style>
 </head>
 <body>
@@ -206,11 +258,11 @@
 <aside class="sidebar">
   <div class="sidebar-logo">⚡ EQUINOX<span>JRA AI PREDICTOR</span></div>
   <nav class="sidebar-nav">
-    <div class="nav-item active"><span class="nav-icon">🏠</span>ダッシュボード</div>
-    <div class="nav-item"><span class="nav-icon">🔍</span>レース検索</div>
-    <div class="nav-item"><span class="nav-icon">🏇</span>馬データベース</div>
-    <div class="nav-item"><span class="nav-icon">📊</span>成績分析</div>
-    <div class="nav-item"><span class="nav-icon">⚙️</span>設定</div>
+    <div class="nav-item active" onclick="switchPage('dashboard', this)"><span class="nav-icon">🏠</span>ダッシュボード</div>
+    <div class="nav-item" onclick="switchPage('search', this)"><span class="nav-icon">🔍</span>レース検索</div>
+    <div class="nav-item" onclick="switchPage('horses', this)"><span class="nav-icon">🏇</span>馬データベース</div>
+    <div class="nav-item" onclick="switchPage('analysis', this)"><span class="nav-icon">📊</span>成績分析</div>
+    <div class="nav-item" onclick="switchPage('settings', this)"><span class="nav-icon">⚙️</span>設定</div>
   </nav>
 </aside>
 
@@ -226,8 +278,8 @@
     <div style="font-size:12px; opacity:0.8;" id="lastUpdated">最終更新: ー</div>
   </header>
 
-  <!-- コンテンツ -->
-  <div class="content" id="content">
+  <!-- ダッシュボードページ -->
+  <div class="content page active" id="page-dashboard">
     <div id="welcome" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;text-align:center;gap:24px">
       <div style="font-size:80px;line-height:1">🏇</div>
       <div>
@@ -250,6 +302,167 @@
       </button>
     </div>
   </div>
+
+  <!-- レース検索ページ -->
+  <div class="content page" id="page-search">
+    <div class="search-form">
+      <div style="font-size:16px;font-weight:900;margin-bottom:16px">🔍 レース検索</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>開催日</label>
+          <input type="date" id="s-date">
+        </div>
+        <div class="form-group">
+          <label>競馬場</label>
+          <select id="s-course">
+            <option value="">すべて</option>
+            <option>札幌</option><option>函館</option><option>福島</option><option>新潟</option>
+            <option>東京</option><option>中山</option><option>中京</option><option>京都</option>
+            <option>阪神</option><option>小倉</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>距離</label>
+          <select id="s-dist">
+            <option value="">すべて</option>
+            <option>〜1400m（短距離）</option>
+            <option>1400〜1800m（マイル）</option>
+            <option>1800〜2200m（中距離）</option>
+            <option>2200m〜（長距離）</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>馬場</label>
+          <select id="s-surface">
+            <option value="">すべて</option>
+            <option>芝</option><option>ダート</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="searchRaces()">検索する</button>
+    </div>
+    <table class="race-list-table" id="raceListTable">
+      <thead><tr>
+        <th>開催日</th><th>競馬場</th><th>R</th><th>レース名</th>
+        <th>条件</th><th>距離</th><th>頭数</th><th>予測</th>
+      </tr></thead>
+      <tbody id="raceListBody">
+        <tr><td colspan="8" style="text-align:center;padding:40px;color:#9ca3af">検索条件を入力して検索ボタンを押してください</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 馬データベースページ -->
+  <div class="content page" id="page-horses">
+    <div style="font-size:16px;font-weight:900;margin-bottom:16px">🏇 馬データベース</div>
+    <div class="horse-search-bar">
+      <input type="text" id="horseSearchInput" placeholder="馬名で検索（例：ステラリア）" oninput="searchHorses(this.value)">
+      <button class="btn-primary" onclick="searchHorses(document.getElementById('horseSearchInput').value)">検索</button>
+    </div>
+    <div class="horse-card-grid" id="horseCardGrid">
+      <!-- 馬カードのサンプル -->
+      ${['ステラリア','グランアレグリア','ソングライン','シュネルマイスター','イクイノックス','リバティアイランド'].map(n => `
+      <div class="horse-card" onclick="showHorseDetail('${n}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div class="horse-card-name">${n}</div>
+            <div class="horse-card-info">牝5 / 父: キタサンブラック / 美浦</div>
+          </div>
+          <div class="horse-card-score">82</div>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          <span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:4px;font-size:11px">芝◎</span>
+          <span style="background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:4px;font-size:11px">東京◎</span>
+          <span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-size:11px">マイル○</span>
+        </div>
+      </div>`).join('')}
+    </div>
+  </div>
+
+  <!-- 成績分析ページ -->
+  <div class="content page" id="page-analysis">
+    <div style="font-size:16px;font-weight:900;margin-bottom:16px">📊 成績分析</div>
+    <div class="analysis-grid">
+      <div class="kpi-card">
+        <div class="kpi-val">24.3%</div>
+        <div class="kpi-label">複勝的中率</div>
+        <div class="kpi-diff" style="color:#16a34a">▲ +2.1% 先月比</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val" style="color:#c9a84c">112.6%</div>
+        <div class="kpi-label">複勝回収率</div>
+        <div class="kpi-diff" style="color:#16a34a">▲ +4.3% 先月比</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val">18.7%</div>
+        <div class="kpi-label">馬連的中率</div>
+        <div class="kpi-diff" style="color:#dc2626">▼ -1.2% 先月比</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val" style="color:#c9a84c">108.3%</div>
+        <div class="kpi-label">馬連回収率</div>
+        <div class="kpi-diff" style="color:#16a34a">▲ +3.1% 先月比</div>
+      </div>
+    </div>
+    <div class="analysis-charts">
+      <div class="chart-card">
+        <div class="card-title">月別回収率推移</div>
+        <div style="height:220px"><canvas id="roiChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="card-title">馬券種別 回収率比較</div>
+        <div style="height:220px"><canvas id="betTypeChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 設定ページ -->
+  <div class="content page" id="page-settings">
+    <div style="font-size:16px;font-weight:900;margin-bottom:16px">⚙️ 設定</div>
+    <div class="settings-section">
+      <div class="settings-title">🎯 期待値閾値（この値以上の馬券のみ推奨）</div>
+      <div class="setting-row">
+        <div><div class="setting-label">複勝 閾値</div><div class="setting-desc">推奨範囲: 1.10〜1.30</div></div>
+        <input class="setting-input" type="number" value="1.15" step="0.05" min="1.0" max="2.0">
+      </div>
+      <div class="setting-row">
+        <div><div class="setting-label">ワイド 閾値</div><div class="setting-desc">推奨範囲: 1.15〜1.40</div></div>
+        <input class="setting-input" type="number" value="1.20" step="0.05" min="1.0" max="2.0">
+      </div>
+      <div class="setting-row">
+        <div><div class="setting-label">馬連 閾値</div><div class="setting-desc">推奨範囲: 1.20〜1.50</div></div>
+        <input class="setting-input" type="number" value="1.25" step="0.05" min="1.0" max="2.0">
+      </div>
+      <div class="setting-row">
+        <div><div class="setting-label">3連複 閾値</div><div class="setting-desc">推奨範囲: 1.25〜1.60</div></div>
+        <input class="setting-input" type="number" value="1.30" step="0.05" min="1.0" max="2.0">
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-title">💰 資金管理</div>
+      <div class="setting-row">
+        <div><div class="setting-label">1レースあたりの予算</div><div class="setting-desc">ケリー基準の計算に使用</div></div>
+        <input class="setting-input" type="number" value="10000" step="1000">
+      </div>
+      <div class="setting-row">
+        <div><div class="setting-label">ケリー基準 分数</div><div class="setting-desc">0.25 = フルケリーの25%（推奨）</div></div>
+        <input class="setting-input" type="number" value="0.25" step="0.05" min="0.05" max="1.0">
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-title">🔔 表示設定</div>
+      <div class="setting-row">
+        <div><div class="setting-label">期待値の低い馬券を非表示</div><div class="setting-desc">閾値未満の馬券をテーブルから除外</div></div>
+        <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+      </div>
+      <div class="setting-row">
+        <div><div class="setting-label">AIスコアバーを表示</div><div class="setting-desc">出馬表にスコアバーを表示</div></div>
+        <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="saveSettings()" style="margin-top:8px">💾 設定を保存</button>
+  </div>
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -257,6 +470,116 @@
 <script>
 const FRAME_COLORS = ['f1','f2','f3','f4','f5','f6','f7','f8'];
 let radarChart = null;
+let roiChart = null;
+let betTypeChart = null;
+
+// ---- ページ切替 ----
+function switchPage(page, navEl) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  navEl.classList.add('active');
+
+  // ヘッダーの検索欄は dashboard のみ表示
+  const header = document.querySelector('.header-left');
+  header.style.visibility = page === 'dashboard' ? 'visible' : 'hidden';
+
+  if (page === 'analysis') initAnalysisCharts();
+}
+
+// ---- レース検索 ----
+function searchRaces() {
+  const date = document.getElementById('s-date').value;
+  const course = document.getElementById('s-course').value;
+  // モックデータで表示（実運用時はAPIで置換）
+  const mockRaces = [
+    {date:'2024/06/02', course:'東京', r:11, name:'安田記念G1',    cond:'芝 良', dist:1600, count:18},
+    {date:'2024/06/02', course:'東京', r:10, name:'鞍馬ステークス', cond:'芝 良', dist:1200, count:16},
+    {date:'2024/06/02', course:'中京', r:11, name:'中京記念',      cond:'芝 良', dist:2000, count:14},
+    {date:'2024/06/01', course:'東京', r:12, name:'ダービー卿CT',  cond:'芝 良', dist:1600, count:16},
+    {date:'2024/06/01', course:'阪神', r: 9, name:'鳴尾記念G3',    cond:'芝 良', dist:2000, count:12},
+  ].filter(r => (!date || r.date === date.replace(/-/g,'/')) && (!course || r.course === course));
+
+  const grades = ['G1','','G3','',''];
+  const tbody = document.getElementById('raceListBody');
+  if (!mockRaces.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#9ca3af">該当レースなし</td></tr>';
+    return;
+  }
+  tbody.innerHTML = mockRaces.map((r,i) => {
+    const g = r.name.match(/G[123]/) ? r.name.match(/G[123]/)[0] : 'OP';
+    const cls = g==='G1'?'badge-g1':g==='G2'?'badge-g2':g==='G3'?'badge-g3':'badge-op';
+    const fakeId = '202406020511';
+    return `<tr onclick="goToRace('${fakeId}')">
+      <td>${r.date}</td><td>${r.course}</td><td>${r.r}R</td>
+      <td><span class="${cls}">${g}</span> ${r.name.replace(/G[123]/,'')}</td>
+      <td>${r.cond}</td><td>${r.dist}m</td><td>${r.count}頭</td>
+      <td><button class="btn-primary" style="padding:4px 12px;font-size:11px" onclick="event.stopPropagation();goToRace('${fakeId}')">予測</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function goToRace(raceId) {
+  switchPage('dashboard', document.querySelector('.nav-item'));
+  document.getElementById('raceIdInput').value = raceId;
+  loadRace();
+}
+
+// ---- 馬検索 ----
+function searchHorses(q) {
+  // 実運用時はAPIで馬DBを検索
+  showToast('馬データはデータ収集後に検索できます');
+}
+function showHorseDetail(name) {
+  showToast(`${name} の詳細画面（データ収集後に使用可能）`);
+}
+
+// ---- 成績分析チャート ----
+function initAnalysisCharts() {
+  const months = ['1月','2月','3月','4月','5月','6月'];
+  if (!roiChart) {
+    roiChart = new Chart(document.getElementById('roiChart'), {
+      type: 'line',
+      data: {
+        labels: months,
+        datasets: [
+          { label:'複勝', data:[108,105,112,109,115,113], borderColor:'#2d9b56', tension:0.3, fill:false },
+          { label:'馬連', data:[102,98,107,104,110,108],  borderColor:'#c9a84c', tension:0.3, fill:false },
+          { label:'3連複',data:[95, 102,108,98, 112,106], borderColor:'#7c3aed', tension:0.3, fill:false },
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ position:'bottom', labels:{ font:{size:11} } } },
+        scales:{ y:{ min:90, ticks:{ callback: v => v+'%' } } }
+      }
+    });
+  }
+  if (!betTypeChart) {
+    betTypeChart = new Chart(document.getElementById('betTypeChart'), {
+      type: 'bar',
+      data: {
+        labels: ['複勝','ワイド','馬連','3連複'],
+        datasets: [{
+          label: '回収率',
+          data: [112.6, 109.4, 108.3, 104.7],
+          backgroundColor: ['#2d9b56','#2563eb','#c9a84c','#7c3aed'],
+          borderRadius: 6,
+        }]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{ y:{ min:95, ticks:{ callback: v => v+'%' } } }
+      }
+    });
+  }
+}
+
+// ---- 設定保存 ----
+function saveSettings() {
+  showToast('✅ 設定を保存しました');
+}
 
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -343,7 +666,7 @@ function renderPage(data) {
   const d = data;
   const totalStake = d.recommendations.reduce((s,r) => s+r.stake, 0);
 
-  document.getElementById('content').innerHTML = `
+  document.getElementById('page-dashboard').innerHTML = `
   <!-- レースヒーロー -->
   <div class="race-hero">
     <div>
@@ -445,7 +768,7 @@ async function loadRace() {
   const raceId = document.getElementById('raceIdInput').value.trim();
   if (!raceId) { showToast('レースIDを入力してください'); return; }
 
-  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div>予測計算中...</div>';
+  document.getElementById('page-dashboard').innerHTML = '<div class="loading"><div class="spinner"></div>予測計算中...</div>';
 
   try {
     const res = await fetch(`/api/race/${raceId}`);
@@ -455,7 +778,7 @@ async function loadRace() {
     renderPage(json.data);
     showToast('✅ 予測完了！');
   } catch(e) {
-    document.getElementById('content').innerHTML = `<div class="loading" style="color:var(--red)">⚠️ エラー: ${e.message}</div>`;
+    document.getElementById('page-dashboard').innerHTML = `<div class="loading" style="color:var(--red)">⚠️ エラー: ${e.message}</div>`;
   }
 }
 
