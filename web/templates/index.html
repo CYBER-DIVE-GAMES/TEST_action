@@ -220,7 +220,7 @@
   <!-- ヘッダー -->
   <header class="header">
     <div class="header-left">
-      <input class="race-id-input" id="raceIdInput" type="text" placeholder="レースID（例: 202405050811）" value="202405050811">
+      <input class="race-id-input" id="raceIdInput" type="text" placeholder="レースID（例: 202405050811）" value="">
       <button class="btn-search" onclick="loadRace()">🔍 予測実行</button>
     </div>
     <div style="font-size:12px; opacity:0.8;" id="lastUpdated">最終更新: ー</div>
@@ -228,7 +228,27 @@
 
   <!-- コンテンツ -->
   <div class="content" id="content">
-    <div class="loading"><div class="spinner"></div>データを読み込み中...</div>
+    <div id="welcome" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;text-align:center;gap:24px">
+      <div style="font-size:80px;line-height:1">🏇</div>
+      <div>
+        <div style="font-size:28px;font-weight:900;color:#1a1a2e;margin-bottom:8px">JRA AI 予想ツール</div>
+        <div style="font-size:14px;color:#6b7280;margin-bottom:4px">netkeibaのレースページからレースIDを取得して入力してください</div>
+        <div style="font-size:12px;color:#9ca3af">例）https://race.netkeiba.com/race/result.html?race_id=<strong style="color:#1a6b3a">202405050811</strong></div>
+      </div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px 32px;max-width:480px">
+        <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:10px">📋 レースIDの読み方</div>
+        <div style="font-size:12px;color:#374151;line-height:2;text-align:left">
+          <span style="background:#dcfce7;padding:1px 6px;border-radius:3px;font-weight:700">2024</span> 年 &nbsp;
+          <span style="background:#dbeafe;padding:1px 6px;border-radius:3px;font-weight:700">05</span> 月 &nbsp;
+          <span style="background:#fef3c7;padding:1px 6px;border-radius:3px;font-weight:700">05</span> 日 &nbsp;
+          <span style="background:#f3e8ff;padding:1px 6px;border-radius:3px;font-weight:700">08</span> 競馬場 &nbsp;
+          <span style="background:#fee2e2;padding:1px 6px;border-radius:3px;font-weight:700">11</span> レース番号
+        </div>
+      </div>
+      <button class="btn-search" style="padding:12px 36px;font-size:15px" onclick="document.getElementById('raceIdInput').focus()">
+        🔍 レースIDを入力して予測開始
+      </button>
+    </div>
   </div>
 </div>
 
@@ -282,7 +302,7 @@ function renderHorseTable(horses) {
         <td class="horse-name-cell">${h.name}</td>
         <td>${h.sex_age}</td>
         <td>${h.jockey}</td>
-        <td>${h.weight_carried}</td>
+        <td>${h.weight_carried ?? 'ー'}</td>
         <td>${h.weight > 0 ? h.weight + (h.weight_diff >= 0 ? '<span style="color:#16a34a;font-size:10px">(+'+h.weight_diff+')</span>' : '<span style="color:#dc2626;font-size:10px">('+h.weight_diff+')</span>') : 'ー'}</td>
         <td class="${oddsClass(h.win_odds)}">${h.win_odds}</td>
         <td><span style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:11px">${h.popularity}番人気</span></td>
@@ -431,6 +451,7 @@ async function loadRace() {
     const res = await fetch(`/api/race/${raceId}`);
     const json = await res.json();
     if (json.status !== 'ok') throw new Error(json.message);
+    document.getElementById('welcome')?.remove();
     renderPage(json.data);
     showToast('✅ 予測完了！');
   } catch(e) {
@@ -438,8 +459,7 @@ async function loadRace() {
   }
 }
 
-// 初回ロード
-loadRace();
+// 初回は自動ロードしない
 </script>
 </body>
 </html>
