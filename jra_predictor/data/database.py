@@ -63,6 +63,8 @@ class Database:
             trainer_id TEXT,
             owner TEXT,
             prize REAL,
+            is_win INTEGER DEFAULT 0,
+            is_place INTEGER DEFAULT 0,
             UNIQUE(race_id, horse_number)
         );
 
