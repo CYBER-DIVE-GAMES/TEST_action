@@ -125,13 +125,13 @@ def cmd_predict(args):
 
 def cmd_import(args):
     from jra_predictor.data import Database
-    from jra_predictor.data.csv_importer import CsvImporter
+    from jra_predictor.data.kaggle_importer import KaggleJraImporter
     db = Database()
-    importer = CsvImporter(db)
+    importer = KaggleJraImporter(db)
     from pathlib import Path
     p = Path(args.path)
     if p.is_dir():
-        importer.import_folder(args.path)
+        importer.import_all(args.path)
     else:
         importer.import_race_results(args.path)
     logger.info("インポート完了")
