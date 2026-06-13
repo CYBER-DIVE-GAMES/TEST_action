@@ -28,7 +28,7 @@ FEATURE_COLS = [
     "avg_popularity_3", "avg_popularity_5",
     "avg_odds_5", "odds_change",
     "prev_finish", "prev2_finish",
-    "avg_last3f_5", "last3f_rank",
+    "avg_last3f_5",
     "days_since_last", "career_runs",
     # 騎手
     "jockey_win_rate_30", "jockey_win_rate_100",
@@ -39,8 +39,8 @@ FEATURE_COLS = [
     # コース・距離適性
     "horse_course_wins", "horse_course_place",
     "horse_surface_wins", "horse_condition_wins",
-    # ペース・脚質
-    "avg_running_style", "n_frontrunners",
+    # ペース・脚質（avg_running_styleはshift(1)で過去履歴のみ参照）
+    "avg_running_style",
     # 血統
     "sire_win_rate", "sire_place_rate", "sire_dist_win_rate",
     # 馬体重

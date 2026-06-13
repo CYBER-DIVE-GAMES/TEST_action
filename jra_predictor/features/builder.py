@@ -198,11 +198,8 @@ class FeatureBuilder:
         return df
 
     def _add_pace_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """ペース・展開予測特徴量"""
-        # 同一レース内での上がり3F順位（小さいほど良い）
-        df["last3f_rank"] = df.groupby("race_id")["last_3f"].rank(ascending=True)
-
-        # 通過順位から先行・差し・追い込みタイプを推定
+        """ペース・展開予測特徴量（レース前に判明している情報のみ使用）"""
+        # 通過順位から先行・差し・追い込みタイプを推定（過去レースの結果）
         def estimate_running_style(passing):
             if not isinstance(passing, str):
                 return np.nan
@@ -219,14 +216,12 @@ class FeatureBuilder:
 
         df["running_style"] = df["passing_order"].apply(estimate_running_style)
 
-        # 馬の脚質（過去履歴からの平均）
+        # 馬の脚質傾向（過去履歴のみ参照: shift(1)）
         df["avg_running_style"] = df.groupby("horse_id")["running_style"].transform(
             lambda x: x.shift(1).rolling(5, min_periods=1).mean()
         )
 
-        # レース内の逃げ馬頭数（展開の激しさ）
-        df["n_frontrunners"] = df[df["running_style"] == 1].groupby("race_id")["horse_id"].transform("count")
-        df["n_frontrunners"] = df["n_frontrunners"].fillna(0)
+        # ※ last3f_rank と n_frontrunners は当レース結果に依存するため除外
 
         return df
 
