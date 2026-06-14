@@ -870,39 +870,71 @@ def api_predict_url():
         else:
             logger.warning(f"Could not fetch odds for {race_id}")
 
-        # 3. 各馬の過去成績を取得（DBになければnetkeibaから）
-        horse_scraper = HorseProfileScraper()
-        for horse_id in df_entry["horse_id"].dropna().unique():
-            if not horse_id:
-                continue
-            existing = db.read_table("horse_history", f"horse_id='{horse_id}'")
-            if existing.empty:
-                history = horse_scraper.fetch_horse_history(horse_id)
-                if history is not None:
-                    db.upsert_horse_history(history)
-
-        # 4. 特徴量構築 & 予測
-        from jra_predictor.features import FeatureBuilder
+        # 3. 特徴量をインラインで構築（DBフル再構築を避けて高速化）
         from jra_predictor.models import RacePredictor, ExpectedValueCalculator
         from jra_predictor.backtest.engine import BacktestEngine
 
-        builder = FeatureBuilder(db)
-        # 直近3年に絞って高速化（ローリング統計に十分な期間）
-        from datetime import datetime, timedelta
-        since = (datetime.now() - timedelta(days=365*3)).strftime("%Y-%m-%d")
-        df_all = builder.build(since_date=since)
-        df_race = df_all[df_all["race_id"] == race_id]
+        df_race = df_entry.copy()
+        df_race["date"] = pd.to_datetime(df_race.get("date", ""), errors="coerce")
+        df_race["horse_number"] = pd.to_numeric(df_race["horse_number"], errors="coerce").fillna(0)
+        df_race["frame_number"] = pd.to_numeric(df_race.get("frame_number", 1), errors="coerce").fillna(1)
+        df_race["win_odds"] = pd.to_numeric(df_race.get("win_odds", None), errors="coerce").fillna(0)
+        df_race["popularity"] = pd.to_numeric(df_race.get("popularity", None), errors="coerce").fillna(0)
+        df_race["weight_carried"] = pd.to_numeric(df_race.get("weight_carried", 55), errors="coerce").fillna(55)
 
-        if df_race.empty:
-            return jsonify({
-                "status": "error",
-                "message": f"特徴量が構築できませんでした（horse_history不足の可能性）。出走馬数: {len(entries)}"
-            }), 500
+        df_race["sex"] = df_race["sex_age"].str.extract(r"([牡牝騸セ])")
+        df_race["age"] = pd.to_numeric(df_race["sex_age"].str.extract(r"(\d+)")[0], errors="coerce")
+        df_race["field_count"] = len(df_race)
+        df_race["horse_number_ratio"] = df_race["horse_number"] / df_race["field_count"]
+        df_race["frame_number_norm"] = df_race["frame_number"] / 8.0
+        df_race["is_win"] = 0
+        df_race["is_place"] = 0
 
-        win_model = RacePredictor("is_win")
-        place_model = RacePredictor("is_place")
-        win_model.load()
-        place_model.load()
+        dist_val = pd.to_numeric(df_race.get("distance", None), errors="coerce").fillna(
+            info.get("distance", 1600)
+        )
+        df_race["distance"] = dist_val
+        df_race["distance_cat"] = pd.cut(
+            df_race["distance"], bins=[0, 1400, 1800, 2200, 9999],
+            labels=["sprint", "mile", "middle", "long"]
+        )
+
+        wc = df_race["weight_carried"]
+        df_race["weight_handicap"] = wc - wc.mean()
+
+        pop_min = df_race["popularity"].min()
+        pop_max = df_race["popularity"].max()
+        df_race["popularity_norm"] = (df_race["popularity"] - pop_min) / (pop_max - pop_min + 1e-9)
+
+        fav_rows = df_race[df_race["popularity"] == 1]
+        fav_o = float(fav_rows["win_odds"].values[0]) if len(fav_rows) else float(df_race["win_odds"].min())
+        df_race["fav_odds"] = fav_o
+        df_race["relative_odds"] = df_race["win_odds"] / (fav_o + 1e-9)
+
+        # 過去統計列はNaNのまま（モデルはNaN許容）
+        for col in ["win_rate_3", "win_rate_5", "win_rate_10",
+                    "place_rate_3", "place_rate_5", "place_rate_10",
+                    "avg_popularity_3", "avg_popularity_5", "avg_popularity_10",
+                    "avg_odds_3", "avg_odds_5", "avg_odds_10",
+                    "prev_finish", "prev2_finish", "prev_odds", "odds_change",
+                    "avg_last3f_5", "days_since_last", "career_runs",
+                    "jockey_win_rate_30", "jockey_win_rate_100",
+                    "jockey_place_rate_30", "jockey_place_rate_100",
+                    "jockey_course_wins", "jockey_dist_wins",
+                    "trainer_win_rate_50", "trainer_place_rate_50",
+                    "horse_course_wins", "horse_course_place",
+                    "horse_dist_wins", "horse_surface_wins", "horse_condition_wins",
+                    "avg_running_style", "sire_win_rate", "sire_place_rate",
+                    "sire_dist_win_rate", "avg_weight_3", "weight_vs_avg"]:
+            if col not in df_race.columns:
+                df_race[col] = float("nan")
+
+        win_model = _cache.get("win_model") or RacePredictor("is_win")
+        place_model = _cache.get("place_model") or RacePredictor("is_place")
+        if not _cache.get("win_model"):
+            win_model.load()
+        if not _cache.get("place_model"):
+            place_model.load()
 
         ev_calc = ExpectedValueCalculator(win_model, place_model)
 
