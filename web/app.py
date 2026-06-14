@@ -518,7 +518,10 @@ def api_predict_url():
 
         entries = []
         if rows_html:
-            for tr in rows_html:
+            # OikiriDataHead（過去走行）の行を除外、本馬のみ
+            main_rows = [tr for tr in rows_html
+                         if not any('OikiriData' in c for c in (tr.get('class') or []))]
+            for tr in main_rows:
                 tds = tr.select("td")
                 horse_link = tr.select_one("a[href*='/horse/']")
                 if not horse_link:
@@ -568,24 +571,36 @@ def api_predict_url():
         db = Database()
         df_entry = pd.DataFrame(entries)
 
-        # race_info
-        from jra_predictor.scraper import RaceResultScraper
-        rs = RaceResultScraper()
-        info = rs.fetch_race_info(race_id)
-        if info:
-            db.upsert_race_info(info)
-        else:
-            # URLから最低限の情報を構成
-            course_code = race_id[8:10]
-            from config.settings import COURSE_CODES
-            db.upsert_race_info({
-                "race_id": race_id,
-                "date": f"{race_id[:4]}-{race_id[4:6]}-{race_id[6:8]}",
-                "course": COURSE_CODES.get(course_code, course_code),
-                "course_code": course_code,
-                "race_number": int(race_id[10:12]),
-            })
-
+        # race_info: 取得済みsoupのタイトルから抽出
+        info = {"race_id": race_id}
+        if soup and soup.title:
+            title_text = soup.title.string or ""
+            # 例: "宝塚記念(G1) 5走表示 | 2026年6月14日 阪神11R"
+            import re as _re
+            m_date = _re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", title_text)
+            if m_date:
+                info["date"] = f"{m_date.group(1)}-{int(m_date.group(2)):02d}-{int(m_date.group(3)):02d}"
+            m_name = _re.match(r"([^\|]+)", title_text)
+            if m_name:
+                info["race_name"] = m_name.group(1).split("5走")[0].strip()
+            m_venue = _re.search(r"\d{4}年\d+月\d+日\s+(\S+?)\d+R", title_text)
+            if m_venue:
+                info["course"] = m_venue.group(1)
+            m_rnum = _re.search(r"(\d+)R", title_text)
+            if m_rnum:
+                info["race_number"] = int(m_rnum.group(1))
+        # URLにrace_idがある場合はそこからも補完
+        course_code = race_id[8:10]
+        from config.settings import COURSE_CODES
+        if "course" not in info:
+            info["course"] = COURSE_CODES.get(course_code, course_code)
+        info["course_code"] = course_code
+        if "race_number" not in info:
+            info["race_number"] = int(race_id[10:12])
+        if "date" not in info:
+            # race_idフォーマットが YYYYMMDDCCRR の場合のみ有効
+            info["date"] = f"{race_id[:4]}-{race_id[4:6]}-{race_id[6:8]}"
+        db.upsert_race_info(info)
         db.upsert_race_results(df_entry)
 
         # 3. 各馬の過去成績を取得（DBになければnetkeibaから）
