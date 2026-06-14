@@ -651,19 +651,47 @@ def api_register_race():
 
 @app.route("/api/registered-races")
 def api_registered_races():
-    """登録済みレース一覧（デフォルト: 今日JST）"""
+    """登録済みレース一覧（date未指定=今日JST、date=''=全件）"""
     from datetime import datetime, timezone, timedelta
     JST = timezone(timedelta(hours=9))
     today = datetime.now(JST).strftime("%Y-%m-%d")
-    date_q = request.args.get("date", today)
+    date_param = request.args.get("date", None)
+    # dateパラメータなし→今日、空文字→全件
+    if date_param is None:
+        date_q = today
+        all_records = False
+    elif date_param == "":
+        date_q = None
+        all_records = True
+    else:
+        date_q = date_param
+        all_records = False
     try:
         conn = _get_log_conn()
-        rows = conn.execute(
-            "SELECT * FROM registered_races WHERE date=? ORDER BY race_number ASC",
-            (date_q,)
-        ).fetchall()
+        if all_records:
+            rows = conn.execute(
+                "SELECT * FROM registered_races ORDER BY date DESC, race_number ASC"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM registered_races WHERE date=? ORDER BY race_number ASC",
+                (date_q,)
+            ).fetchall()
         conn.close()
-        return jsonify({"status": "ok", "races": [dict(r) for r in rows], "date": date_q})
+        return jsonify({"status": "ok", "races": [dict(r) for r in rows], "date": date_q or "all"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/registered-races/<race_id>", methods=["DELETE"])
+def api_delete_registered_race(race_id: str):
+    """登録済みレースを削除"""
+    try:
+        conn = _get_log_conn()
+        conn.execute("DELETE FROM registered_races WHERE race_id=?", (race_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 

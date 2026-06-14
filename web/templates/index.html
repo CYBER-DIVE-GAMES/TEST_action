@@ -391,6 +391,7 @@ async function loadRegisteredRaces(){
         <td style="white-space:nowrap">
           <button class="btn btn-outline btn-sm" onclick="refreshOdds('${r.race_id}',this)" title="オッズ更新">🔄</button>
           <button class="btn btn-green btn-sm" onclick="repredictRace('${r.race_id}',this)">再予測</button>
+          <button class="btn btn-sm" style="background:var(--red);color:#fff;border:none" onclick="deleteRegisteredRace('${r.race_id}','${(r.race_name||r.race_id).replace(/'/g,'')}',this)">🗑</button>
         </td>
       </tr>`;
     }).join('');
@@ -537,13 +538,38 @@ function recsHTML(recs){
     </div>`).join('')}</div>`;
 }
 
+// ===== DELETE REGISTERED RACE =====
+async function deleteRegisteredRace(raceId, raceName, btn){
+  if(!confirm(`「${raceName}」を登録済みリストから削除しますか？`)) return;
+  const orig=btn.textContent;
+  btn.disabled=true; btn.textContent='削除中...';
+  try{
+    const res=await fetch('/api/registered-races/'+raceId,{method:'DELETE'});
+    const j=await res.json();
+    if(j.status==='ok'){
+      showToast('🗑 削除しました');
+      loadRegisteredRaces();
+      // 検索ページが表示中なら再検索
+      const searchBody=document.getElementById('searchResultBody');
+      if(searchBody && searchBody.closest('.page')?.style.display!=='none') searchRegistered();
+    } else {
+      showToast('削除エラー: '+(j.message||'不明なエラー'));
+      btn.disabled=false; btn.textContent=orig;
+    }
+  }catch(e){
+    showToast('削除エラー: '+e.message);
+    btn.disabled=false; btn.textContent=orig;
+  }
+}
+
 // ===== SEARCH =====
 async function searchRegistered(){
   const date=document.getElementById('sq-date').value;
   const tbody=document.getElementById('searchResultBody');
   tbody.innerHTML='<tr><td colspan="9" class="empty"><div class="loading"><div class="spinner"></div></div></td></tr>';
   try{
-    const url='/api/registered-races'+(date?'?date='+date:'');
+    // date未入力=全件、入力あり=日付指定
+    const url='/api/registered-races'+(date?'?date='+date:'?date=');
     const j=await(await fetch(url)).json();
     if(!j.races||!j.races.length){tbody.innerHTML='<tr><td colspan="9" class="empty">該当レースなし</td></tr>';return;}
     tbody.innerHTML=j.races.map(r=>{
@@ -556,7 +582,10 @@ async function searchRegistered(){
         <td>${r.distance||'—'}m</td>
         <td>${r.field_count||'—'}頭</td>
         <td id="bet-count-${r.race_id}">—</td>
-        <td><button class="btn btn-green btn-sm" onclick="reloadRaceByIdAndSwitch('${r.race_id}')">再予測</button></td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-green btn-sm" onclick="reloadRaceByIdAndSwitch('${r.race_id}')">再予測</button>
+          <button class="btn btn-sm" style="background:var(--red);color:#fff;border:none" onclick="deleteRegisteredRace('${r.race_id}','${(r.race_name||r.race_id).replace(/'/g,'')}',this)">🗑</button>
+        </td>
       </tr>`;
     }).join('');
     // Load bet counts
