@@ -77,8 +77,9 @@ def _load_in_background():
         _cache["ready"] = True
         logger.info(f"Web app ready: {len(df)} rows loaded")
     except Exception as e:
+        import traceback
         _cache["error"] = str(e)
-        logger.error(f"Load error: {e}")
+        logger.error(f"Load error: {e}\n{traceback.format_exc()}")
     finally:
         _cache["loading"] = False
 
