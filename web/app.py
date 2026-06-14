@@ -651,17 +651,13 @@ def api_register_race():
 
 @app.route("/api/registered-races")
 def api_registered_races():
-    """登録済みレース一覧（デフォルト: 今日JST、2週間以上古いデータは自動削除）"""
+    """登録済みレース一覧（デフォルト: 今日JST）"""
     from datetime import datetime, timezone, timedelta
     JST = timezone(timedelta(hours=9))
     today = datetime.now(JST).strftime("%Y-%m-%d")
     date_q = request.args.get("date", today)
     try:
         conn = _get_log_conn()
-        # 2週間以上古い登録を自動削除
-        cutoff = (datetime.now(JST) - timedelta(days=14)).strftime("%Y-%m-%d")
-        conn.execute("DELETE FROM registered_races WHERE date < ?", (cutoff,))
-        conn.commit()
         rows = conn.execute(
             "SELECT * FROM registered_races WHERE date=? ORDER BY race_number ASC",
             (date_q,)
