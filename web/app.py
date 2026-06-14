@@ -689,16 +689,58 @@ def api_predict_url():
 
     try:
         from jra_predictor.scraper.race_result import RaceResultScraper
+        from jra_predictor.scraper.base import get_with_browser
         from jra_predictor.data import Database
+        from config.settings import NETKEIBA_RACE, NETKEIBA_BASE, COURSE_CODES
         import pandas as pd
 
         scraper = RaceResultScraper()
 
-        # 1. 出走表取得: fetch_race_entry → fetch_race_result の順で試す
+        # 1. 出走表取得: ユーザーURL → shutuba.html → shutuba_past.html → result.html の順で試す
         logger.info(f"predict-url: fetching entries for {race_id}")
-        df_entry = scraper.fetch_race_entry(race_id)
-        if df_entry is None or df_entry.empty:
-            df_entry = scraper.fetch_race_result(race_id)
+
+        def _scrape_url(fetch_url):
+            """任意のnetkeiba URLから馬リストをDataFrameで返す"""
+            is_result = re.search(r"/race/\d{12}/?$", fetch_url)
+            wait_sel = "table.race_table_01" if is_result else "tr.HorseList"
+            soup = get_with_browser(fetch_url, wait_selector=wait_sel, timeout_ms=20000)
+            if soup is None:
+                return None
+            # shutuba系
+            rows = (soup.select("tr.HorseList")
+                    or soup.select("tr[class*='HorseList']"))
+            if rows:
+                return scraper.fetch_race_entry(race_id)  # 正規パーサーに委譲
+            # result系
+            table = (soup.select_one("table.race_table_01")
+                     or next((t for t in soup.find_all("table")
+                               if t.select("a[href*='/horse/']")), None))
+            if table:
+                return scraper.fetch_race_result(race_id)  # 正規パーサーに委譲
+            return None
+
+        df_entry = None
+        urls_to_try = [
+            url,  # ユーザーが貼ったURL（最優先）
+            f"{NETKEIBA_RACE}/race/shutuba_past.html?race_id={race_id}",
+            f"{NETKEIBA_RACE}/race/shutuba.html?race_id={race_id}",
+            f"{NETKEIBA_BASE}/race/{race_id}/",
+        ]
+        seen = set()
+        for try_url in urls_to_try:
+            if try_url in seen:
+                continue
+            seen.add(try_url)
+            logger.info(f"predict-url trying: {try_url}")
+            # result.html (db.netkeiba) は直接 fetch_race_result で
+            if re.search(r"/race/\d{12}/?$", try_url):
+                df_entry = scraper.fetch_race_result(race_id)
+            else:
+                df_entry = scraper.fetch_race_entry(race_id)
+            if df_entry is not None and not df_entry.empty:
+                logger.info(f"Got {len(df_entry)} horses from {try_url}")
+                break
+            df_entry = None
 
         if df_entry is None or df_entry.empty:
             return jsonify({
@@ -711,20 +753,21 @@ def api_predict_url():
         entries = df_entry.to_dict("records")
         logger.info(f"predict-url: got {len(entries)} horses")
 
-        # 2. race_info取得
+        # 2. race_info取得（日付・レース名・距離はスクレイピングで取得、race_idからは取らない）
         db = Database()
         info = scraper.fetch_race_info(race_id) or {"race_id": race_id}
 
-        # race_idから基本情報を補完
+        # race_idから会場コード・レース番号だけ補完（日付はスクレイピング結果を使う）
         course_code = race_id[8:10]
-        from config.settings import COURSE_CODES
-        if "course" not in info or not info.get("course"):
+        if not info.get("course"):
             info["course"] = COURSE_CODES.get(course_code, course_code)
         info["course_code"] = course_code
-        if "race_number" not in info or not info.get("race_number"):
+        if not info.get("race_number"):
             info["race_number"] = int(race_id[10:12])
-        if "date" not in info or not info.get("date"):
-            info["date"] = f"{race_id[:4]}-{race_id[4:6]}-{race_id[6:8]}"
+        # 日付が取れなかった場合のみ今日の日付で補完
+        if not info.get("date"):
+            from datetime import date
+            info["date"] = date.today().isoformat()
         db.upsert_race_info(info)
 
         # race情報をentryにも埋め込む
