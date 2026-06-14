@@ -7,3 +7,4 @@ data/*.csv
 models_saved/*.pkl
 logs/*.log
 .DS_Store
+.claude/
