@@ -25,52 +25,23 @@ HEADERS = {
     "Upgrade-Insecure-Requests": "1",
 }
 
-_playwright_instance = None
-_pw_browser = None
-
-
-def _get_browser():
-    """Playwrightブラウザのシングルトン取得"""
-    global _playwright_instance, _pw_browser
-    if _pw_browser is None:
-        try:
-            from playwright.sync_api import sync_playwright
-            _playwright_instance = sync_playwright().start()
-            _pw_browser = _playwright_instance.chromium.launch(
-                headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage"],
-            )
-            logger.info("Playwrightブラウザ起動完了")
-        except Exception as e:
-            logger.error(f"Playwright起動失敗: {e}")
-            _pw_browser = None
-    return _pw_browser
-
-
-def _reset_browser():
-    """ブラウザインスタンスをリセット"""
-    global _playwright_instance, _pw_browser
-    try:
-        if _pw_browser:
-            _pw_browser.close()
-    except Exception:
-        pass
-    try:
-        if _playwright_instance:
-            _playwright_instance.stop()
-    except Exception:
-        pass
-    _pw_browser = None
-    _playwright_instance = None
-
-
 def get_with_browser(url: str, wait_selector: str = None, timeout_ms: int = 60000) -> BeautifulSoup | None:
-    """Playwrightでページを取得してBeautifulSoupに変換"""
-    browser = _get_browser()
-    if browser is None:
+    """Playwrightでページを取得してBeautifulSoupに変換（毎回新規ブラウザ）"""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        logger.error("Playwrightがインストールされていません")
         return None
+
+    pw = None
+    browser = None
     page = None
     try:
+        pw = sync_playwright().start()
+        browser = pw.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+        )
         page = browser.new_page()
         page.set_extra_http_headers({"Accept-Language": "ja,en-US;q=0.9"})
         page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
@@ -84,19 +55,15 @@ def get_with_browser(url: str, wait_selector: str = None, timeout_ms: int = 6000
         html = page.content()
         return BeautifulSoup(html, "lxml")
     except Exception as e:
-        err = str(e)
-        logger.warning(f"Playwright取得失敗 {url}: {err[:120]}")
-        # ブラウザプロセスが死んでいる場合のみリセット
-        if "closed" in err.lower() or "crashed" in err.lower() or "disconnected" in err.lower():
-            logger.info("ブラウザクラッシュ検出 → リセット")
-            _reset_browser()
+        logger.warning(f"Playwright取得失敗 {url}: {str(e)[:120]}")
         return None
     finally:
-        if page:
-            try:
-                page.close()
-            except Exception:
-                pass
+        for obj in [page, browser, pw]:
+            if obj:
+                try:
+                    obj.close() if hasattr(obj, 'close') else obj.stop()
+                except Exception:
+                    pass
 
 
 class BaseScaper:
