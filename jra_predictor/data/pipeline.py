@@ -73,8 +73,8 @@ class DataPipeline:
             if info:
                 self.db.upsert_race_info(info)
 
-            # 出走馬の過去成績を取得（特徴量計算に必要）
-            df_entry = self.result_scraper.fetch_race_result(race_id)
+            # 出走馬の過去成績を取得（未開催は出走表、開催済みは結果ページ）
+            df_entry = self.result_scraper.fetch_race_entry(race_id)
             if df_entry is not None and not df_entry.empty:
                 self.db.upsert_race_results(df_entry)
                 for horse_id in df_entry["horse_id"].dropna().unique():

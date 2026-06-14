@@ -12,6 +12,89 @@ logger = logging.getLogger(__name__)
 
 class RaceResultScraper(BaseScaper):
 
+    def fetch_race_entry(self, race_id: str) -> pd.DataFrame | None:
+        """出走表（shutuba）ページから出走馬一覧を取得（未開催レース用）"""
+        url = f"{NETKEIBA_RACE}/race/shutuba.html"
+        soup = self.get(url, params={"race_id": race_id})
+        if soup is None:
+            return None
+
+        # テーブルを探す
+        table = soup.select_one("table.Shutuba_Table, table.shutuba_table, table#shutuba_table")
+        if table is None:
+            # fallback: 結果ページも試す
+            return self.fetch_race_result(race_id)
+
+        rows = []
+        for tr in table.select("tr.HorseList, tr[class*='HorseList']"):
+            tds = tr.select("td")
+            if len(tds) < 6:
+                continue
+            try:
+                horse_link = tr.select_one("td.Horse_Info a, a[href*='/horse/']")
+                horse_id = ""
+                horse_name = ""
+                if horse_link:
+                    m = re.search(r"/horse/(\w+)", horse_link.get("href", ""))
+                    if m:
+                        horse_id = m.group(1)
+                    horse_name = horse_link.get_text(strip=True)
+
+                jockey_link = tr.select_one("a[href*='/jockey/']")
+                jockey_id = ""
+                jockey_name = ""
+                if jockey_link:
+                    m = re.search(r"/jockey/(\w+)", jockey_link.get("href", ""))
+                    if m:
+                        jockey_id = m.group(1)
+                    jockey_name = jockey_link.get_text(strip=True)
+
+                trainer_link = tr.select_one("a[href*='/trainer/']")
+                trainer_id = ""
+                trainer_name = ""
+                if trainer_link:
+                    m = re.search(r"/trainer/(\w+)", trainer_link.get("href", ""))
+                    if m:
+                        trainer_id = m.group(1)
+                    trainer_name = trainer_link.get_text(strip=True)
+
+                # 各セルをテキストで取得
+                texts = [td.get_text(strip=True) for td in tds]
+
+                rows.append({
+                    "race_id": race_id,
+                    "frame_number": self._safe_int(texts[0]) if texts else None,
+                    "horse_number": self._safe_int(texts[1]) if len(texts) > 1 else None,
+                    "horse_name": horse_name or (texts[3] if len(texts) > 3 else ""),
+                    "horse_id": horse_id,
+                    "sex_age": texts[4] if len(texts) > 4 else "",
+                    "weight_carried": self._safe_float(texts[5]) if len(texts) > 5 else None,
+                    "jockey_name": jockey_name,
+                    "jockey_id": jockey_id,
+                    "trainer_name": trainer_name,
+                    "trainer_id": trainer_id,
+                    "win_odds": self._safe_float(texts[-3]) if len(texts) > 3 else None,
+                    "popularity": self._safe_int(texts[-2]) if len(texts) > 2 else None,
+                    "horse_weight": None,
+                    "horse_weight_diff": None,
+                    "finish_order": None,
+                    "finish_time_sec": None,
+                    "margin": "",
+                    "passing_order": "",
+                    "last_3f": None,
+                    "is_win": 0,
+                    "is_place": 0,
+                })
+            except Exception as e:
+                logger.debug(f"Entry row parse error: {e}")
+                continue
+
+        if not rows:
+            logger.warning(f"Entry table not found: {race_id}")
+            return None
+
+        return pd.DataFrame(rows)
+
     def fetch_race_result(self, race_id: str) -> pd.DataFrame | None:
         """着順・タイム・馬情報を取得"""
         url = f"{NETKEIBA_BASE}/race/{race_id}/"
