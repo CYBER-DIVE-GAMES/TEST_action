@@ -56,13 +56,14 @@ def get_with_browser(url: str, wait_selector: str = None, timeout_ms: int = 1500
     try:
         page = browser.new_page()
         page.set_extra_http_headers({"Accept-Language": "ja,en-US;q=0.9"})
-        page.goto(url, timeout=timeout_ms, wait_until="networkidle")
+        page.goto(url, timeout=timeout_ms, wait_until="load")
         if wait_selector:
             try:
-                page.wait_for_selector(wait_selector, timeout=12000)
+                page.wait_for_selector(wait_selector, timeout=8000)
             except Exception:
-                pass
-        page.wait_for_timeout(2000)
+                page.wait_for_timeout(4000)
+        else:
+            page.wait_for_timeout(4000)
         html = page.content()
         return BeautifulSoup(html, "lxml")
     except Exception as e:
