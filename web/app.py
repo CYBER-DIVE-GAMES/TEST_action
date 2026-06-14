@@ -457,5 +457,203 @@ def api_update_bet(bet_id: int):
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@app.route("/api/predict-url", methods=["POST"])
+def api_predict_url():
+    """netkeibaのURLを受け取って予測を返す"""
+    data = request.json or {}
+    url = data.get("url", "").strip()
+    if not url:
+        return jsonify({"status": "error", "message": "URLを入力してください"}), 400
+
+    # race_idをURLから抽出
+    import re
+    m = re.search(r"race_id=(\d{12})", url)
+    if not m:
+        return jsonify({"status": "error", "message": "URLからrace_id（12桁）が取得できません"}), 400
+    race_id = m.group(1)
+
+    try:
+        # 1. Playwrightでページを取得して出走馬リストを取得
+        from jra_predictor.scraper.base import get_with_browser
+        from jra_predictor.scraper import HorseProfileScraper
+        from jra_predictor.data import Database
+        import pandas as pd
+
+        soup = get_with_browser(url, wait_selector="tr.HorseList", timeout_ms=20000)
+        entries = []
+        if soup:
+            rows_html = (
+                soup.select("tr.HorseList")
+                or soup.select("tr[class*='HorseList']")
+                or [tr for tr in soup.select("tr")
+                    if tr.select_one("a[href*='/horse/']") and len(tr.select("td")) >= 4]
+            )
+            for tr in rows_html:
+                tds = tr.select("td")
+                horse_link = tr.select_one("a[href*='/horse/']")
+                if not horse_link:
+                    continue
+                m2 = re.search(r"/horse/(\w+)", horse_link.get("href", ""))
+                horse_id = m2.group(1) if m2 else ""
+                horse_name = horse_link.get_text(strip=True)
+                jockey_link = tr.select_one("a[href*='/jockey/']")
+                jockey_id, jockey_name = "", ""
+                if jockey_link:
+                    m3 = re.search(r"/jockey/(\w+)", jockey_link.get("href", ""))
+                    jockey_id = m3.group(1) if m3 else ""
+                    jockey_name = jockey_link.get_text(strip=True)
+                texts = [td.get_text(strip=True) for td in tds]
+                entries.append({
+                    "race_id": race_id,
+                    "frame_number": _safe_int(texts[0]) if texts else None,
+                    "horse_number": _safe_int(texts[1]) if len(texts) > 1 else None,
+                    "horse_name": horse_name,
+                    "horse_id": horse_id,
+                    "sex_age": texts[4] if len(texts) > 4 else "",
+                    "weight_carried": _safe_float(texts[5]) if len(texts) > 5 else None,
+                    "jockey_name": jockey_name,
+                    "jockey_id": jockey_id,
+                    "finish_order": None, "finish_time_sec": None,
+                    "margin": "", "passing_order": "", "last_3f": None,
+                    "horse_weight": None, "horse_weight_diff": None,
+                    "win_odds": None, "popularity": None,
+                    "is_win": 0, "is_place": 0,
+                })
+
+        if not entries:
+            return jsonify({
+                "status": "error",
+                "message": f"出走馬が取得できませんでした。レースIDは {race_id} です。"
+                           " URLが正しいか確認してください（shutuba.html または shutuba_past.html）"
+            }), 404
+
+        # 2. DBに保存
+        db = Database()
+        df_entry = pd.DataFrame(entries)
+
+        # race_info
+        from jra_predictor.scraper import RaceResultScraper
+        rs = RaceResultScraper()
+        info = rs.fetch_race_info(race_id)
+        if info:
+            db.upsert_race_info(info)
+        else:
+            # URLから最低限の情報を構成
+            course_code = race_id[8:10]
+            from config.settings import COURSE_CODES
+            db.upsert_race_info({
+                "race_id": race_id,
+                "date": f"{race_id[:4]}-{race_id[4:6]}-{race_id[6:8]}",
+                "course": COURSE_CODES.get(course_code, course_code),
+                "course_code": course_code,
+                "race_number": int(race_id[10:12]),
+            })
+
+        db.upsert_race_results(df_entry)
+
+        # 3. 各馬の過去成績を取得（DBになければnetkeibaから）
+        horse_scraper = HorseProfileScraper()
+        for horse_id in df_entry["horse_id"].dropna().unique():
+            if not horse_id:
+                continue
+            existing = db.read_table("horse_history", f"horse_id='{horse_id}'")
+            if existing.empty:
+                history = horse_scraper.fetch_horse_history(horse_id)
+                if history is not None:
+                    db.upsert_horse_history(history)
+
+        # 4. 特徴量構築 & 予測
+        from jra_predictor.features import FeatureBuilder
+        from jra_predictor.models import RacePredictor, ExpectedValueCalculator
+        from jra_predictor.backtest.engine import BacktestEngine
+
+        builder = FeatureBuilder(db)
+        df_all = builder.build()
+        df_race = df_all[df_all["race_id"] == race_id]
+
+        if df_race.empty:
+            return jsonify({
+                "status": "error",
+                "message": f"特徴量が構築できませんでした（horse_history不足の可能性）。出走馬数: {len(entries)}"
+            }), 500
+
+        win_model = RacePredictor("is_win")
+        place_model = RacePredictor("is_place")
+        win_model.load()
+        place_model.load()
+
+        ev_calc = ExpectedValueCalculator(win_model, place_model)
+        bt = BacktestEngine(db)
+        odds = bt._get_odds_for_race(race_id)
+        if not any(odds.values()):
+            odds = bt._build_odds_from_df(df_race)
+
+        recs_df = ev_calc.recommend(df_race, odds, budget=10000)
+
+        win_probs = win_model.predict_proba(df_race)
+        place_probs = place_model.predict_proba(df_race)
+
+        horses_out = []
+        for i, (_, row) in enumerate(df_race.sort_values("horse_number").iterrows()):
+            horses_out.append({
+                "number": int(row.get("horse_number", 0) or 0),
+                "name": str(row.get("horse_name", "")),
+                "jockey": str(row.get("jockey_name", "")),
+                "win_prob": round(float(win_probs[i]), 3),
+                "place_prob": round(float(place_probs[i]), 3),
+                "score": int(min(99, max(1, place_probs[i] * 200))),
+            })
+
+        allowed = {"複勝", "ワイド", "3連複"}
+        recommendations = []
+        if not recs_df.empty:
+            for _, r in recs_df.iterrows():
+                if str(r["bet_type"]) not in allowed:
+                    continue
+                recommendations.append({
+                    "bet_type": str(r["bet_type"]),
+                    "combination": str(r["combination"]),
+                    "odds": float(r["odds"]),
+                    "probability": float(r["probability"]),
+                    "expected_value": float(r["expected_value"]),
+                    "stake": int(r["stake"]),
+                })
+
+        first = df_race.iloc[0]
+        return jsonify({
+            "status": "ok",
+            "data": {
+                "race_id": race_id,
+                "race_name": str(first.get("race_name", race_id)),
+                "venue": str(first.get("course", "")),
+                "date": str(first.get("date", ""))[:10],
+                "distance": int(first.get("distance", 0) or 0),
+                "surface": str(first.get("surface", "")),
+                "field_count": len(df_race),
+                "horses": horses_out,
+                "recommendations": recommendations,
+                "has_recommendations": len(recommendations) > 0,
+            }
+        })
+
+    except Exception as e:
+        logger.exception(f"predict-url error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+def _safe_int(s):
+    try:
+        return int(str(s).replace(",", ""))
+    except Exception:
+        return None
+
+
+def _safe_float(s):
+    try:
+        return float(str(s).replace(",", ""))
+    except Exception:
+        return None
+
+
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=5000)

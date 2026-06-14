@@ -363,6 +363,22 @@ input[type=date]{color-scheme:dark;}
       </div>
     </div>
 
+    <!-- URL PREDICT -->
+    <div style="background:var(--card2);border:1px solid var(--green);border-radius:12px;padding:16px 20px;margin-bottom:18px;">
+      <div style="font-size:13px;font-weight:700;color:var(--green2);margin-bottom:10px;">🔗 netkeibaのURLから予測</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">
+        netkeibaで見たいレースの出走表ページを開き、URLをそのまま貼り付けてください。<br>
+        例: <code style="background:var(--dark);padding:2px 6px;border-radius:4px;font-size:10px;">https://race.netkeiba.com/race/shutuba.html?race_id=202609030411</code>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" id="urlInput" placeholder="https://race.netkeiba.com/race/shutuba.html?race_id=..."
+          style="flex:1;background:var(--dark);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:12px;"
+          onkeydown="if(event.key==='Enter')predictFromUrl()">
+        <button class="btn btn-gold" onclick="predictFromUrl()" id="urlPredictBtn">⚡ 予測する</button>
+      </div>
+      <div id="urlPredictStatus" style="margin-top:8px;font-size:11px;color:var(--muted);display:none;"></div>
+    </div>
+
     <!-- TODAY'S RACES -->
     <div class="section-header">
       <div class="section-title">📅 レース一覧</div>
@@ -547,6 +563,41 @@ async function checkStatus(){
     else if(j.error){dot.className='dot error';txt.textContent='エラー';}
     else{dot.className='dot';txt.textContent='読込中...';setTimeout(checkStatus,5000);}
   }catch(e){setTimeout(checkStatus,10000);}
+}
+
+// ===== URL PREDICT =====
+async function predictFromUrl(){
+  const url=document.getElementById('urlInput').value.trim();
+  if(!url){showToast('URLを入力してください');return;}
+  const btn=document.getElementById('urlPredictBtn');
+  const status=document.getElementById('urlPredictStatus');
+  btn.disabled=true;btn.textContent='処理中...';
+  status.style.display='block';
+  status.style.color='var(--muted)';
+  status.textContent='⏳ ブラウザで出走表を取得中（30秒程度かかります）...';
+  try{
+    const res=await fetch('/api/predict-url',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url})
+    });
+    const j=await res.json();
+    if(j.status!=='ok') throw new Error(j.message);
+    status.style.color='#10b981';
+    status.textContent=`✅ ${j.data.field_count}頭の出走表を取得 → 予測完了`;
+    // 予測ページに結果を表示
+    const detail=document.getElementById('raceDetail');
+    detail.style.display='block';
+    detail.innerHTML=renderRaceDetail(j.data);
+    detail.scrollIntoView({behavior:'smooth',block:'start'});
+    showToast('✅ URL予測完了！');
+  }catch(e){
+    status.style.color='var(--red)';
+    status.textContent='❌ '+e.message;
+    showToast('エラー: '+e.message);
+  }finally{
+    btn.disabled=false;btn.textContent='⚡ 予測する';
+  }
 }
 
 // ===== TODAY RACES =====
