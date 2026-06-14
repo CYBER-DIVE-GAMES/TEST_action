@@ -843,6 +843,155 @@ def api_actual_stats():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+
+def _fetch_history_features(horse_ids: list, jockey_ids: list, trainer_ids: list,
+                             race_date: str, course_code: str, surface: str, distance: int) -> dict:
+    """DBから馬・騎手・調教師の過去成績を取得して特徴量dictを返す
+
+    Returns: {horse_id: {feature_name: value, ...}, ...}
+    """
+    try:
+        import sqlite3 as _sqlite3
+        import numpy as np
+        conn = _sqlite3.connect(_DB_PATH)
+        conn.row_factory = _sqlite3.Row
+    except Exception:
+        return {}
+
+    result = {hid: {} for hid in horse_ids}
+
+    try:
+        # ---- 馬の過去成績（race_results から） ----
+        for horse_id in horse_ids:
+            if not horse_id:
+                continue
+            rows = conn.execute(
+                """SELECT finish_order, win_odds, popularity, last_3f, date,
+                          course_code, surface, is_win, is_place
+                   FROM race_results
+                   WHERE horse_id=? AND date < ?
+                   ORDER BY date DESC LIMIT 15""",
+                (horse_id, race_date)
+            ).fetchall()
+
+            if not rows:
+                continue
+
+            feats = result[horse_id]
+            fo = [r["finish_order"] for r in rows if r["finish_order"] is not None]
+            is_win_list  = [r["is_win"]   or 0 for r in rows]
+            is_place_list = [r["is_place"] or 0 for r in rows]
+            odds_list    = [r["win_odds"]  for r in rows if r["win_odds"] is not None]
+            pop_list     = [r["popularity"] for r in rows if r["popularity"] is not None]
+            lf_list      = [r["last_3f"]   for r in rows if r["last_3f"] is not None]
+
+            feats["prev_finish"]  = float(fo[0])  if len(fo) > 0 else np.nan
+            feats["prev2_finish"] = float(fo[1])  if len(fo) > 1 else np.nan
+
+            for w, col in [(3,"3"),(5,"5"),(10,"10")]:
+                w_win  = is_win_list[:w]
+                w_plc  = is_place_list[:w]
+                w_pop  = pop_list[:w]
+                w_odds = odds_list[:w]
+                feats[f"win_rate_{col}"]        = float(np.mean(w_win))  if w_win  else np.nan
+                feats[f"place_rate_{col}"]      = float(np.mean(w_plc))  if w_plc  else np.nan
+                feats[f"avg_popularity_{col}"]  = float(np.mean(w_pop))  if w_pop  else np.nan
+                if col in ("5",):
+                    feats["avg_odds_5"] = float(np.mean(w_odds)) if w_odds else np.nan
+
+            feats["avg_last3f_5"] = float(np.mean(lf_list[:5])) if lf_list else np.nan
+            feats["career_runs"]  = len(rows)
+
+            # 前走からの休養日数
+            if rows:
+                from datetime import date as _date
+                try:
+                    prev_d = _date.fromisoformat(rows[0]["date"])
+                    this_d = _date.fromisoformat(race_date)
+                    feats["days_since_last"] = (this_d - prev_d).days
+                except Exception:
+                    pass
+
+            # オッズ変化（前走オッズは rows[0] に入っているが今のオッズは呼び出し側で設定済み）
+            if odds_list:
+                feats["_prev_odds"] = float(odds_list[0])  # 呼び出し側でodds_changeを計算
+
+            # コース別複勝率
+            course_rows = [r for r in rows if r["course_code"] == course_code]
+            feats["horse_course_wins"]  = float(np.mean([r["is_win"]   or 0 for r in course_rows])) if course_rows else np.nan
+            feats["horse_course_place"] = float(np.mean([r["is_place"] or 0 for r in course_rows])) if course_rows else np.nan
+
+            # 馬場（芝/ダ）別勝率
+            surf_rows = [r for r in rows if r["surface"] == surface]
+            feats["horse_surface_wins"] = float(np.mean([r["is_win"] or 0 for r in surf_rows])) if surf_rows else np.nan
+
+        # ---- 騎手の過去成績 ----
+        jockey_feats = {}
+        for jid in set(jockey_ids):
+            if not jid:
+                continue
+            rows = conn.execute(
+                """SELECT is_win, is_place, course_code, distance
+                   FROM race_results
+                   WHERE jockey_id=? AND date < ?
+                   ORDER BY date DESC LIMIT 120""",
+                (jid, race_date)
+            ).fetchall()
+            if not rows:
+                continue
+
+            iw  = [r["is_win"]   or 0 for r in rows]
+            ipl = [r["is_place"] or 0 for r in rows]
+
+            f = {}
+            f["jockey_win_rate_30"]   = float(np.mean(iw[:30]))  if len(iw) >= 5 else np.nan
+            f["jockey_win_rate_100"]  = float(np.mean(iw[:100])) if len(iw) >= 5 else np.nan
+            f["jockey_place_rate_30"] = float(np.mean(ipl[:30])) if len(ipl) >= 5 else np.nan
+            f["jockey_place_rate_100"]= float(np.mean(ipl[:100]))if len(ipl) >= 5 else np.nan
+
+            # コース別
+            cc_rows = [r for r in rows if r["course_code"] == course_code]
+            f["jockey_course_wins"] = float(np.mean([r["is_win"] or 0 for r in cc_rows])) if cc_rows else np.nan
+
+            # 距離帯別
+            dist_cat = "sprint" if distance <= 1400 else ("mile" if distance <= 1800 else ("middle" if distance <= 2200 else "long"))
+            dist_ranges = {"sprint":(0,1400),"mile":(1401,1800),"middle":(1801,2200),"long":(2201,9999)}
+            lo, hi = dist_ranges[dist_cat]
+            dc_rows = [r for r in rows if r["distance"] and lo <= r["distance"] <= hi]
+            f["jockey_dist_wins"] = float(np.mean([r["is_win"] or 0 for r in dc_rows])) if dc_rows else np.nan
+
+            jockey_feats[jid] = f
+
+        # ---- 調教師の過去成績 ----
+        trainer_feats = {}
+        for tid in set(trainer_ids):
+            if not tid:
+                continue
+            rows = conn.execute(
+                """SELECT is_win, is_place FROM race_results
+                   WHERE trainer_id=? AND date < ?
+                   ORDER BY date DESC LIMIT 60""",
+                (tid, race_date)
+            ).fetchall()
+            if not rows:
+                continue
+            iw  = [r["is_win"]   or 0 for r in rows]
+            ipl = [r["is_place"] or 0 for r in rows]
+            trainer_feats[tid] = {
+                "trainer_win_rate_50":   float(np.mean(iw[:50]))  if len(iw) >= 5 else np.nan,
+                "trainer_place_rate_50": float(np.mean(ipl[:50])) if len(ipl) >= 5 else np.nan,
+            }
+
+    except Exception as e:
+        logger.warning(f"_fetch_history_features error: {e}")
+    finally:
+        conn.close()
+
+    # 騎手・調教師特徴量を horse_id → jockey_id のマッピングで合成
+    # （呼び出し側でマージする）
+    return {"horse": result, "jockey": jockey_feats, "trainer": trainer_feats}
+
+
 @app.route("/api/predict-url", methods=["POST"])
 def api_predict_url():
     """netkeibaのURLを受け取って予測を返す"""
@@ -1020,22 +1169,54 @@ def api_predict_url():
         df["distance_cat"] = pd.cut(df["distance"], bins=[0, 1400, 1800, 2200, 9999],
                                      labels=["sprint", "mile", "middle", "long"])
 
-        # 過去統計は全NaN（モデルはNaNを -999 で処理）
-        HIST_COLS = ["win_rate_3","win_rate_5","win_rate_10",
-                     "place_rate_3","place_rate_5","place_rate_10",
-                     "avg_popularity_3","avg_popularity_5","avg_odds_5","odds_change",
-                     "prev_finish","prev2_finish","avg_last3f_5","days_since_last","career_runs",
-                     "jockey_win_rate_30","jockey_win_rate_100",
-                     "jockey_place_rate_30","jockey_place_rate_100",
-                     "jockey_course_wins","jockey_dist_wins",
-                     "trainer_win_rate_50","trainer_place_rate_50",
-                     "horse_course_wins","horse_course_place",
-                     "horse_dist_wins","horse_surface_wins","horse_condition_wins",
-                     "avg_running_style","sire_win_rate","sire_place_rate","sire_dist_win_rate",
-                     "avg_weight_3","weight_vs_avg"]
+        # ── DBから過去成績を取得して特徴量を埋める ──────────────────────────
+        horse_ids_list   = df["horse_id"].tolist()
+        jockey_ids_list  = df["jockey_id"].tolist() if "jockey_id" in df.columns else []
+        trainer_ids_list = df["trainer_id"].tolist() if "trainer_id" in df.columns else []
+        race_date_str = info.get("date") or str(date.today())
+        dist_val = int(df["distance"].iloc[0]) if len(df) else 1600
+
+        hist = _fetch_history_features(
+            horse_ids_list, jockey_ids_list, trainer_ids_list,
+            race_date_str, info.get("course_code",""), info.get("surface",""), dist_val
+        )
+        horse_hist  = hist.get("horse", {})
+        jockey_hist = hist.get("jockey", {})
+        trainer_hist= hist.get("trainer", {})
+
+        # 馬の特徴量をDFに書き込む
+        for col in ["win_rate_3","win_rate_5","win_rate_10","place_rate_3","place_rate_5","place_rate_10",
+                    "avg_popularity_3","avg_popularity_5","avg_odds_5",
+                    "prev_finish","prev2_finish","avg_last3f_5","days_since_last","career_runs",
+                    "horse_course_wins","horse_course_place","horse_surface_wins"]:
+            df[col] = df["horse_id"].map(lambda hid: horse_hist.get(hid, {}).get(col, float("nan")))
+
+        # odds_change = 今のオッズ - 前走オッズ
+        df["odds_change"] = df.apply(
+            lambda row: (row["win_odds"] - horse_hist.get(row["horse_id"], {}).get("_prev_odds", float("nan")))
+            if horse_hist.get(row["horse_id"], {}).get("_prev_odds") is not None else float("nan"), axis=1
+        )
+
+        # 騎手特徴量
+        for col in ["jockey_win_rate_30","jockey_win_rate_100","jockey_place_rate_30",
+                    "jockey_place_rate_100","jockey_course_wins","jockey_dist_wins"]:
+            df[col] = df["jockey_id"].map(lambda jid: jockey_hist.get(jid, {}).get(col, float("nan"))) \
+                if "jockey_id" in df.columns else float("nan")
+
+        # 調教師特徴量
+        for col in ["trainer_win_rate_50","trainer_place_rate_50"]:
+            df[col] = df["trainer_id"].map(lambda tid: trainer_hist.get(tid, {}).get(col, float("nan"))) \
+                if "trainer_id" in df.columns else float("nan")
+
+        # 残りのHIST_COLSはNaN
+        HIST_COLS = ["horse_dist_wins","horse_condition_wins","avg_running_style",
+                     "sire_win_rate","sire_place_rate","sire_dist_win_rate","avg_weight_3","weight_vs_avg"]
         for col in HIST_COLS:
             if col not in df.columns:
                 df[col] = float("nan")
+
+        filled = df[["horse_id","prev_finish","place_rate_5","jockey_win_rate_30","trainer_win_rate_50"]].head(3)
+        logger.info(f"DB history features sample:\n{filled.to_string()}")
 
         # object → numeric 変換
         NON_NUMERIC = {"race_id","horse_name","horse_id","jockey_name","jockey_id",
