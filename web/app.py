@@ -695,24 +695,29 @@ def api_predict_url():
         import pandas as pd
 
         def _try_fetch(fetch_url):
-            s = get_with_browser(fetch_url, wait_selector="tr.HorseList", timeout_ms=25000)
+            # result.htmlは tr.HorseList がないので別セレクタを使う
+            is_result_page = re.search(r"/race/\d{12}/?$", fetch_url)
+            wait_sel = "table.race_table_01" if is_result_page else "tr.HorseList"
+            s = get_with_browser(fetch_url, wait_selector=wait_sel, timeout_ms=25000)
             if s is None:
                 return None, []
             rows_html = (
                 s.select("tr.HorseList")
                 or s.select("tr[class*='HorseList']")
-                or [tr for tr in s.select("tr")
-                    if tr.select_one("a[href*='/horse/']") and len(tr.select("td")) >= 4]
+                or [tr for tr in (s.select_one("table.race_table_01") or s).select("tr")
+                    if tr.select_one("a[href*='/horse/']") and len(tr.select("td")) >= 6]
             )
             return s, rows_html
 
-        # shutuba.html → shutuba_past.html の順に試す
-        from config.settings import NETKEIBA_RACE
+        # shutuba.html → shutuba_past.html → result.html の順に試す
+        from config.settings import NETKEIBA_RACE, NETKEIBA_BASE
         urls_to_try = [url]
         if "shutuba.html" in url:
             urls_to_try.append(f"{NETKEIBA_RACE}/race/shutuba_past.html?race_id={race_id}")
         elif "shutuba_past.html" in url:
             urls_to_try.append(f"{NETKEIBA_RACE}/race/shutuba.html?race_id={race_id}")
+        # 終了済みレース: result.htmlにフォールバック
+        urls_to_try.append(f"{NETKEIBA_BASE}/race/{race_id}/")
 
         soup, rows_html = None, []
         for try_url in urls_to_try:
@@ -730,50 +735,88 @@ def api_predict_url():
             if horse_links:
                 logger.info(f"First horse link: {horse_links[0].get('href')}")
 
+        def _parse_entry_row(tr):
+            """shutuba_past / result 両ページ対応のエントリ解析"""
+            tds = tr.select("td")
+            horse_link = tr.select_one("a[href*='/horse/']")
+            if not horse_link:
+                return None
+            m2 = re.search(r"/horse/(\w+)", horse_link.get("href", ""))
+            horse_id = m2.group(1) if m2 else ""
+            horse_name = horse_link.get_text(strip=True)
+            jockey_link = tr.select_one("a[href*='/jockey/']")
+            jockey_id, jockey_name = "", ""
+            if jockey_link:
+                m3 = re.search(r"/jockey/(\w+)", jockey_link.get("href", ""))
+                jockey_id = m3.group(1) if m3 else ""
+                jockey_name = jockey_link.get_text(strip=True)
+            texts = [td.get_text(strip=True) for td in tds]
+
+            # result.html: td[0]=着順, td[1]=枠, td[2]=馬番, td[3]=馬名, td[4]=性齢, td[5]=斤量, td[6]=騎手
+            # shutuba.html: td[0]=枠, td[1]=馬番, ..., td[4]=性齢, td[5]=斤量
+            # 判定: td[0]が着順（数字）かどうか
+            is_result = texts[0].isdigit() and len(texts) >= 10
+
+            if is_result:
+                frame_idx, horse_idx, sex_age_idx, wc_idx = 1, 2, 4, 5
+                win_odds_idx = 12 if len(texts) > 12 else None
+                pop_idx = 13 if len(texts) > 13 else None
+                finish_order = _safe_int(texts[0])
+                raw_wt = texts[14] if len(texts) > 14 else ""
+                wt_m = re.search(r"(\d{3,4})", raw_wt)
+                horse_weight = float(wt_m.group(1)) if wt_m else None
+                wt_diff_m = re.search(r"\(([+-]?\d+)\)", raw_wt)
+                horse_weight_diff = float(wt_diff_m.group(1)) if wt_diff_m else None
+            else:
+                frame_idx, horse_idx, sex_age_idx, wc_idx = 0, 1, 4, 5
+                win_odds_idx = None
+                pop_idx = None
+                finish_order = None
+                horse_weight = None
+                horse_weight_diff = None
+
+            raw_sex_age = texts[sex_age_idx] if len(texts) > sex_age_idx else ""
+            sex_age_m = re.search(r"([牡牝騸セ]\d+)", raw_sex_age)
+            sex_age = sex_age_m.group(1) if sex_age_m else raw_sex_age[:3]
+            raw_wc = texts[wc_idx] if len(texts) > wc_idx else ""
+            wc_m = re.search(r"(\d+\.?\d*)", raw_wc)
+            weight_carried = float(wc_m.group(1)) if wc_m else None
+
+            win_odds = None
+            if win_odds_idx and len(texts) > win_odds_idx:
+                try:
+                    win_odds = float(texts[win_odds_idx])
+                except (ValueError, TypeError):
+                    pass
+            popularity = _safe_int(texts[pop_idx]) if pop_idx and len(texts) > pop_idx else None
+
+            return {
+                "race_id": race_id,
+                "frame_number": _safe_int(texts[frame_idx]) if len(texts) > frame_idx else None,
+                "horse_number": _safe_int(texts[horse_idx]) if len(texts) > horse_idx else None,
+                "horse_name": horse_name,
+                "horse_id": horse_id,
+                "sex_age": sex_age,
+                "weight_carried": weight_carried,
+                "jockey_name": jockey_name,
+                "jockey_id": jockey_id,
+                "finish_order": finish_order,
+                "finish_time_sec": None, "margin": "", "passing_order": "", "last_3f": None,
+                "horse_weight": horse_weight, "horse_weight_diff": horse_weight_diff,
+                "win_odds": win_odds, "popularity": popularity,
+                "is_win": 1 if finish_order == 1 else 0,
+                "is_place": 1 if finish_order and finish_order <= 3 else 0,
+            }
+
         entries = []
         if rows_html:
             # OikiriDataHead（過去走行）の行を除外、本馬のみ
             main_rows = [tr for tr in rows_html
                          if not any('OikiriData' in c for c in (tr.get('class') or []))]
             for tr in main_rows:
-                tds = tr.select("td")
-                horse_link = tr.select_one("a[href*='/horse/']")
-                if not horse_link:
-                    continue
-                m2 = re.search(r"/horse/(\w+)", horse_link.get("href", ""))
-                horse_id = m2.group(1) if m2 else ""
-                horse_name = horse_link.get_text(strip=True)
-                jockey_link = tr.select_one("a[href*='/jockey/']")
-                jockey_id, jockey_name = "", ""
-                if jockey_link:
-                    m3 = re.search(r"/jockey/(\w+)", jockey_link.get("href", ""))
-                    jockey_id = m3.group(1) if m3 else ""
-                    jockey_name = jockey_link.get_text(strip=True)
-                texts = [td.get_text(strip=True) for td in tds]
-                # sex_age: extract only "牡5" style (sex char + digits), stripping jockey/trainer names
-                raw_sex_age = texts[4] if len(texts) > 4 else ""
-                sex_age_m = re.search(r"([牡牝騸セ]\d+)", raw_sex_age)
-                sex_age = sex_age_m.group(1) if sex_age_m else raw_sex_age[:3]
-                # weight_carried: extract number from td text
-                raw_wc = texts[5] if len(texts) > 5 else ""
-                wc_m = re.search(r"(\d+\.?\d*)", raw_wc)
-                weight_carried = float(wc_m.group(1)) if wc_m else None
-                entries.append({
-                    "race_id": race_id,
-                    "frame_number": _safe_int(texts[0]) if texts else None,
-                    "horse_number": _safe_int(texts[1]) if len(texts) > 1 else None,
-                    "horse_name": horse_name,
-                    "horse_id": horse_id,
-                    "sex_age": sex_age,
-                    "weight_carried": weight_carried,
-                    "jockey_name": jockey_name,
-                    "jockey_id": jockey_id,
-                    "finish_order": None, "finish_time_sec": None,
-                    "margin": "", "passing_order": "", "last_3f": None,
-                    "horse_weight": None, "horse_weight_diff": None,
-                    "win_odds": None, "popularity": None,
-                    "is_win": 0, "is_place": 0,
-                })
+                entry = _parse_entry_row(tr)
+                if entry:
+                    entries.append(entry)
 
         if not entries:
             debug_info = ""
