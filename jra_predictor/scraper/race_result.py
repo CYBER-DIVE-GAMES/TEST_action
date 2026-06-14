@@ -13,43 +13,113 @@ logger = logging.getLogger(__name__)
 class RaceResultScraper(BaseScaper):
 
     def fetch_race_entry(self, race_id: str) -> pd.DataFrame | None:
-        """出走表（shutuba）ページから出走馬一覧を取得（未開催レース用）"""
-        url = f"{NETKEIBA_RACE}/race/shutuba.html"
+        """出走表から出走馬一覧を取得（未開催レース用）
+
+        netkeibaのshutubaページはJS動的レンダリングのため、
+        内部JSONAPIを直接叩いてデータを取得する。
+        """
+        # 1. まず内部JSON APIを試す
+        df = self._fetch_entry_from_api(race_id)
+        if df is not None and not df.empty:
+            return df
+
+        # 2. 結果ページ（開催済みの場合）にフォールバック
+        logger.info(f"API fallback to result page: {race_id}")
+        return self.fetch_race_result(race_id)
+
+    def _fetch_entry_from_api(self, race_id: str) -> pd.DataFrame | None:
+        """netkeibaの内部APIから出走表データを取得"""
+        import time as _time
+        import json
+
+        self._init_session()
+
+        # netkeibaが内部で使うAPI候補を順番に試す
+        api_urls = [
+            (f"{NETKEIBA_RACE}/api/api_get_race_info.html",
+             {"race_id": race_id, "rf": "shutuba_past"}),
+            (f"{NETKEIBA_RACE}/api/api_get_race_list.html",
+             {"race_id": race_id}),
+        ]
+
+        for api_url, params in api_urls:
+            try:
+                self.session.headers.update({"Referer": f"{NETKEIBA_RACE}/race/shutuba.html?race_id={race_id}"})
+                resp = self.session.get(api_url, params=params, timeout=15)
+                if resp.status_code == 200 and resp.text.strip().startswith("{"):
+                    data = json.loads(resp.text)
+                    df = self._parse_shutuba_api(data, race_id)
+                    if df is not None and not df.empty:
+                        logger.info(f"Got entry from API ({api_url}): {len(df)} horses")
+                        return df
+            except Exception as e:
+                logger.debug(f"API attempt failed {api_url}: {e}")
+            _time.sleep(1)
+
+        # 3. shutuba_past.html（静的HTMLバージョン）を試す
+        return self._fetch_entry_shutuba_past(race_id)
+
+    def _parse_shutuba_api(self, data: dict, race_id: str) -> pd.DataFrame | None:
+        """内部APIレスポンスのJSON→DataFrameに変換"""
+        horses = (
+            data.get("data", {}).get("RaceUma", [])
+            or data.get("RaceUma", [])
+            or data.get("horses", [])
+            or []
+        )
+        if not horses:
+            return None
+
+        rows = []
+        for h in horses:
+            rows.append({
+                "race_id": race_id,
+                "frame_number": self._safe_int(str(h.get("Wakuban", h.get("frame_number", "")))),
+                "horse_number": self._safe_int(str(h.get("Umaban", h.get("horse_number", "")))),
+                "horse_name": h.get("HorseName", h.get("horse_name", "")),
+                "horse_id": h.get("HorseID", h.get("horse_id", "")),
+                "sex_age": h.get("Sex", "") + str(h.get("Age", "")),
+                "weight_carried": self._safe_float(str(h.get("Futan", h.get("weight_carried", "")))),
+                "jockey_name": h.get("JockeyName", h.get("jockey_name", "")),
+                "jockey_id": h.get("JockeyID", h.get("jockey_id", "")),
+                "trainer_name": h.get("TrainerName", h.get("trainer_name", "")),
+                "trainer_id": h.get("TrainerID", h.get("trainer_id", "")),
+                "win_odds": None,
+                "popularity": None,
+                "horse_weight": None,
+                "horse_weight_diff": None,
+                "finish_order": None,
+                "finish_time_sec": None,
+                "margin": "",
+                "passing_order": "",
+                "last_3f": None,
+                "is_win": 0,
+                "is_place": 0,
+            })
+        return pd.DataFrame(rows) if rows else None
+
+    def _fetch_entry_shutuba_past(self, race_id: str) -> pd.DataFrame | None:
+        """shutuba_past.html（静的HTML）から出走馬を取得"""
+        url = f"{NETKEIBA_RACE}/race/shutuba_past.html"
         soup = self.get(url, params={"race_id": race_id})
         if soup is None:
             return None
 
-        # 全テーブルをデバッグログに出力（初回のみ）
-        all_tables = soup.find_all("table")
-        if all_tables:
-            logger.debug(f"Tables found on shutuba page ({race_id}):")
-            for t in all_tables[:5]:
-                logger.debug(f"  class={t.get('class')} id={t.get('id')}")
-        else:
-            logger.warning(f"No tables at all on shutuba page for {race_id}")
-            # 結果ページにフォールバック
-            return self.fetch_race_result(race_id)
-
-        # 既知の全パターンを試す
+        # このページは静的HTMLでテーブルに馬データが入っている
         table = (
             soup.select_one("table.Shutuba_Table")
-            or soup.select_one("table.shutuba_table")
-            or soup.select_one("table#shutuba_table")
             or soup.select_one("table.RaceTable01")
-            or soup.select_one("table.race_table_01")
-            or soup.select_one("table[summary*='出走']")
-            or (all_tables[0] if all_tables else None)
+            or soup.select_one("table.ShutubaTable")
         )
         if table is None:
-            logger.warning(f"Entry table not found: {race_id}")
-            return self.fetch_race_result(race_id)
+            logger.warning(f"shutuba_past table not found: {race_id}")
+            return None
 
-        # 行セレクタも複数パターン試す
         rows_html = (
             table.select("tr.HorseList")
             or table.select("tr[class*='HorseList']")
-            or table.select("tr[class*='Horse']")
-            or [tr for tr in table.select("tr") if tr.select("td") and len(tr.select("td")) >= 6]
+            or [tr for tr in table.select("tr")
+                if len(tr.select("td")) >= 6 and tr.select_one("a[href*='/horse/']")]
         )
 
         rows = []
@@ -58,9 +128,8 @@ class RaceResultScraper(BaseScaper):
             if len(tds) < 6:
                 continue
             try:
-                horse_link = tr.select_one("td.Horse_Info a, a[href*='/horse/']")
-                horse_id = ""
-                horse_name = ""
+                horse_link = tr.select_one("a[href*='/horse/']")
+                horse_id, horse_name = "", ""
                 if horse_link:
                     m = re.search(r"/horse/(\w+)", horse_link.get("href", ""))
                     if m:
@@ -68,8 +137,7 @@ class RaceResultScraper(BaseScaper):
                     horse_name = horse_link.get_text(strip=True)
 
                 jockey_link = tr.select_one("a[href*='/jockey/']")
-                jockey_id = ""
-                jockey_name = ""
+                jockey_id, jockey_name = "", ""
                 if jockey_link:
                     m = re.search(r"/jockey/(\w+)", jockey_link.get("href", ""))
                     if m:
@@ -77,17 +145,14 @@ class RaceResultScraper(BaseScaper):
                     jockey_name = jockey_link.get_text(strip=True)
 
                 trainer_link = tr.select_one("a[href*='/trainer/']")
-                trainer_id = ""
-                trainer_name = ""
+                trainer_id, trainer_name = "", ""
                 if trainer_link:
                     m = re.search(r"/trainer/(\w+)", trainer_link.get("href", ""))
                     if m:
                         trainer_id = m.group(1)
                     trainer_name = trainer_link.get_text(strip=True)
 
-                # 各セルをテキストで取得
                 texts = [td.get_text(strip=True) for td in tds]
-
                 rows.append({
                     "race_id": race_id,
                     "frame_number": self._safe_int(texts[0]) if texts else None,
@@ -117,9 +182,10 @@ class RaceResultScraper(BaseScaper):
                 continue
 
         if not rows:
-            logger.warning(f"Entry table not found: {race_id}")
+            logger.warning(f"No horse rows in shutuba_past: {race_id}")
             return None
 
+        logger.info(f"Got entry from shutuba_past: {len(rows)} horses for {race_id}")
         return pd.DataFrame(rows)
 
     def fetch_race_result(self, race_id: str) -> pd.DataFrame | None:
