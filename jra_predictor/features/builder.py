@@ -151,6 +151,7 @@ class FeatureBuilder:
         )
 
         # 騎手×距離帯別勝率
+        df["distance"] = pd.to_numeric(df["distance"], errors="coerce").fillna(1600)
         df["distance_cat"] = pd.cut(df["distance"], bins=[0, 1400, 1800, 2200, 9999],
                                      labels=["sprint", "mile", "middle", "long"])
         df["jockey_dist_wins"] = df.groupby(["jockey_id", "distance_cat"])["is_win"].transform(
