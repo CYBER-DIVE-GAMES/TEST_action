@@ -52,7 +52,9 @@ class FeatureBuilder:
                 return pd.DataFrame()
 
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
-        df = df.sort_values(["date", "race_id", "horse_number"]).reset_index(drop=True)
+        df["race_id"] = df["race_id"].fillna("").astype(str)
+        df["horse_number"] = pd.to_numeric(df["horse_number"], errors="coerce").fillna(0)
+        df = df.sort_values(["date", "race_id", "horse_number"], na_position="last").reset_index(drop=True)
 
         df = self._add_basic_features(df)
         df = self._add_horse_form_features(df)
@@ -88,7 +90,7 @@ class FeatureBuilder:
     def _add_horse_form_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """馬の近走成績・能力指標"""
         # 時系列で過去データを参照（当該レース以前のみ）
-        df = df.sort_values(["horse_id", "date", "race_id"])
+        df = df.sort_values(["horse_id", "date", "race_id"], na_position="last")
 
         for window in [3, 5, 10]:
             col_win = f"win_rate_{window}"
@@ -133,7 +135,7 @@ class FeatureBuilder:
 
     def _add_jockey_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """騎手の成績特徴量"""
-        df = df.sort_values(["jockey_id", "date"])
+        df = df.sort_values(["jockey_id", "date"], na_position="last")
 
         for window in [30, 100]:
             df[f"jockey_win_rate_{window}"] = df.groupby("jockey_id")["is_win"].transform(
@@ -159,7 +161,7 @@ class FeatureBuilder:
 
     def _add_trainer_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """調教師の成績特徴量"""
-        df = df.sort_values(["trainer_id", "date"])
+        df = df.sort_values(["trainer_id", "date"], na_position="last")
 
         df["trainer_win_rate_50"] = df.groupby("trainer_id")["is_win"].transform(
             lambda x: x.shift(1).rolling(50, min_periods=5).mean()
