@@ -601,6 +601,11 @@ def api_predict_url():
             # race_idフォーマットが YYYYMMDDCCRR の場合のみ有効
             info["date"] = f"{race_id[:4]}-{race_id[4:6]}-{race_id[6:8]}"
         db.upsert_race_info(info)
+        # 古い重複データを削除してから挿入
+        with db.engine.connect() as conn:
+            from sqlalchemy import text as _text
+            conn.execute(_text("DELETE FROM race_results WHERE race_id = :r"), {"r": race_id})
+            conn.commit()
         db.upsert_race_results(df_entry)
 
         # 3. 各馬の過去成績を取得（DBになければnetkeibaから）
@@ -647,13 +652,22 @@ def api_predict_url():
 
         horses_out = []
         for i, (_, row) in enumerate(df_race.sort_values("horse_number").iterrows()):
+            wo = row.get("win_odds")
+            pop = row.get("popularity")
             horses_out.append({
                 "number": int(row.get("horse_number", 0) or 0),
+                "frame": int(row.get("frame_number", 0) or 0),
                 "name": str(row.get("horse_name", "")),
-                "jockey": str(row.get("jockey_name", "")),
+                "sex_age": str(row.get("sex_age", "") or ""),
+                "jockey": str(row.get("jockey_name", "") or ""),
+                "win_odds": float(wo) if wo and str(wo) not in ("nan", "None") else 0,
+                "popularity": int(pop) if pop and str(pop) not in ("nan", "None") else 0,
+                "weight": 0,
+                "weight_diff": 0,
                 "win_prob": round(float(win_probs[i]), 3),
                 "place_prob": round(float(place_probs[i]), 3),
                 "score": int(min(99, max(1, place_probs[i] * 200))),
+                "finish_order": None,
             })
 
         allowed = {"複勝", "ワイド", "3連複"}
