@@ -104,11 +104,22 @@ class RaceResultScraper(BaseScaper):
     def fetch_race_result(self, race_id: str) -> pd.DataFrame | None:
         """着順・タイム・馬情報を取得"""
         url = f"{NETKEIBA_BASE}/race/{race_id}/"
+
+        # requestsで試す
         soup = self.get(url)
+        # JSレンダリングが必要な場合はPlaywrightにフォールバック
+        if soup is None or not soup.select("a[href*='/horse/']"):
+            logger.info(f"Result page: falling back to Playwright for {race_id}")
+            soup = self.get_browser(url, wait_selector="table.race_table_01")
         if soup is None:
             return None
 
-        table = soup.select_one("table.race_table_01")
+        table = (
+            soup.select_one("table.race_table_01")
+            or soup.select_one("table.result_table_02")
+            or next((t for t in soup.find_all("table")
+                     if t.select("a[href*='/horse/']")), None)
+        )
         if table is None:
             logger.warning(f"Race table not found: {race_id}")
             return None
@@ -116,7 +127,10 @@ class RaceResultScraper(BaseScaper):
         rows = []
         for tr in table.select("tr")[1:]:
             tds = tr.select("td")
-            if len(tds) < 10:
+            if len(tds) < 6:
+                continue
+            # 馬リンクがない行（ヘッダー等）はスキップ
+            if not tr.select_one("a[href*='/horse/']"):
                 continue
             row = self._parse_result_row(tds, race_id)
             if row:
