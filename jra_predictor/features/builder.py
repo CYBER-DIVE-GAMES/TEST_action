@@ -66,12 +66,16 @@ class FeatureBuilder:
         df = self._add_weight_features(df)
         df = self._add_odds_features(df)
 
-        # object型のまま残っている数値列を強制変換（LightGBMがobjectを受け付けないため）
+        # object型の数値列を強制変換（LightGBMはobjectを受け付けない）
+        # 文字列列（horse_name等）はto_numericでNaNになるが特徴量には使わないため問題なし
+        NON_NUMERIC = {"race_id", "horse_name", "horse_id", "jockey_name", "jockey_id",
+                       "trainer_name", "trainer_id", "race_name", "course", "course_code",
+                       "surface", "track_condition", "sex_age", "sex", "margin",
+                       "passing_order", "distance_cat", "sire", "dam_sire", "birth_date",
+                       "owner", "date"}
         for col in df.columns:
-            if df[col].dtype == object:
-                converted = pd.to_numeric(df[col], errors="coerce")
-                if converted.notna().sum() > 0:
-                    df[col] = converted
+            if df[col].dtype == object and col not in NON_NUMERIC:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
 
         logger.info(f"Features built: {len(df)} rows, {len(df.columns)} columns")
         return df
