@@ -47,6 +47,23 @@ def _get_browser():
     return _pw_browser
 
 
+def _reset_browser():
+    """ブラウザインスタンスをリセット"""
+    global _playwright_instance, _pw_browser
+    try:
+        if _pw_browser:
+            _pw_browser.close()
+    except Exception:
+        pass
+    try:
+        if _playwright_instance:
+            _playwright_instance.stop()
+    except Exception:
+        pass
+    _pw_browser = None
+    _playwright_instance = None
+
+
 def get_with_browser(url: str, wait_selector: str = None, timeout_ms: int = 15000) -> BeautifulSoup | None:
     """Playwrightでページを取得してBeautifulSoupに変換"""
     browser = _get_browser()
@@ -68,6 +85,8 @@ def get_with_browser(url: str, wait_selector: str = None, timeout_ms: int = 1500
         return BeautifulSoup(html, "lxml")
     except Exception as e:
         logger.warning(f"Playwright取得失敗 {url}: {e}")
+        # ブラウザが壊れている可能性があるのでリセット
+        _reset_browser()
         return None
     finally:
         if page:
