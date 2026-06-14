@@ -14,58 +14,25 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Hiragino Sans','Meiryo',sans-serif;background:var(--dark);color:var(--text);display:flex;min-height:100vh;}
-
-/* ===== SIDEBAR ===== */
-.sidebar{
-  width:200px;min-height:100vh;background:var(--dark2);
-  display:flex;flex-direction:column;flex-shrink:0;
-  position:fixed;top:0;left:0;bottom:0;z-index:100;
-  border-right:1px solid var(--border);
-}
+.sidebar{width:200px;min-height:100vh;background:var(--dark2);display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;z-index:100;border-right:1px solid var(--border);}
 .logo{padding:20px 16px 14px;border-bottom:1px solid var(--border);}
 .logo-mark{font-size:18px;font-weight:900;letter-spacing:3px;color:var(--gold);display:flex;align-items:center;gap:8px;}
 .logo-mark::before{content:'⚡';font-size:20px;}
 .logo-sub{font-size:9px;color:var(--muted);letter-spacing:2px;margin-top:3px;}
 .nav{padding:12px 0;flex:1;}
-.nav-item{
-  display:flex;align-items:center;gap:10px;padding:10px 16px;
-  font-size:12px;cursor:pointer;color:var(--muted);
-  border-left:3px solid transparent;transition:all 0.15s;
-}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:12px;cursor:pointer;color:var(--muted);border-left:3px solid transparent;transition:all 0.15s;}
 .nav-item:hover{background:rgba(255,255,255,0.05);color:var(--text);}
 .nav-item.active{background:rgba(13,148,136,0.15);border-left-color:var(--green);color:var(--green2);}
 .nav-icon{font-size:15px;width:18px;text-align:center;}
 .sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);}
-.status-pill{
-  display:flex;align-items:center;gap:6px;
-  font-size:10px;color:var(--muted);padding:6px 10px;
-  background:var(--dark);border-radius:20px;
-}
+.status-pill{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);padding:6px 10px;background:var(--dark);border-radius:20px;}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--gold);flex-shrink:0;}
 .dot.ready{background:#10b981;}
 .dot.error{background:var(--red);}
-
-/* ===== MAIN ===== */
 .main{margin-left:200px;flex:1;display:flex;flex-direction:column;min-height:100vh;}
-
-/* ===== TOPBAR ===== */
-.topbar{
-  background:var(--dark2);border-bottom:1px solid var(--border);
-  padding:0 20px;height:52px;display:flex;align-items:center;
-  justify-content:space-between;position:sticky;top:0;z-index:50;
-}
-.search-bar{display:flex;gap:8px;align-items:center;}
-.race-input{
-  background:var(--dark);border:1px solid var(--border);color:var(--text);
-  padding:6px 12px;border-radius:8px;font-size:13px;width:210px;
-  transition:border 0.2s;
-}
-.race-input:focus{outline:none;border-color:var(--green);}
-.race-input::placeholder{color:var(--muted);}
-.btn{
-  padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;
-  cursor:pointer;border:none;transition:all 0.15s;white-space:nowrap;
-}
+.topbar{background:var(--dark2);border-bottom:1px solid var(--border);padding:0 20px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
+.topbar-title{font-size:14px;font-weight:700;color:var(--text);}
+.btn{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:none;transition:all 0.15s;white-space:nowrap;}
 .btn-green{background:var(--green);color:#fff;}
 .btn-green:hover{background:var(--green2);}
 .btn-gold{background:var(--gold);color:#fff;}
@@ -73,123 +40,62 @@ body{font-family:'Hiragino Sans','Meiryo',sans-serif;background:var(--dark);colo
 .btn-outline{background:transparent;color:var(--muted);border:1px solid var(--border);}
 .btn-outline:hover{border-color:var(--green);color:var(--green2);}
 .btn-sm{padding:4px 10px;font-size:11px;}
-
-/* ===== CONTENT ===== */
+.btn-blue{background:var(--blue);color:#fff;}
 .content{padding:18px 20px;flex:1;}
 .page{display:none;}
 .page.active{display:block;}
-
-/* ===== HOME ===== */
-.home-hero{
-  background:linear-gradient(135deg,#0f3d35 0%,#0d9488 60%,#14b8a6 100%);
-  border-radius:14px;padding:28px 32px;margin-bottom:18px;
-  display:flex;align-items:center;justify-content:space-between;
-  position:relative;overflow:hidden;
-}
-.home-hero::after{
-  content:'🏇';font-size:140px;position:absolute;right:24px;bottom:-20px;
-  opacity:0.12;transform:scaleX(-1);line-height:1;
-}
+.home-hero{background:linear-gradient(135deg,#0f3d35 0%,#0d9488 60%,#14b8a6 100%);border-radius:14px;padding:28px 32px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden;}
+.home-hero::after{content:'🏇';font-size:140px;position:absolute;right:24px;bottom:-20px;opacity:0.12;transform:scaleX(-1);line-height:1;}
 .hero-left h1{font-size:26px;font-weight:900;margin-bottom:6px;letter-spacing:1px;}
 .hero-left p{font-size:13px;color:rgba(255,255,255,0.75);margin-bottom:18px;}
 .hero-chips{display:flex;gap:8px;flex-wrap:wrap;}
-.chip{
-  background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);
-  padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;
-  backdrop-filter:blur(4px);
-}
-.hero-stats{
-  display:flex;gap:16px;z-index:1;
-}
+.chip{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;backdrop-filter:blur(4px);}
+.hero-stats{display:flex;gap:16px;z-index:1;}
 .hstat{text-align:center;background:rgba(0,0,0,0.25);border-radius:10px;padding:14px 20px;min-width:100px;}
 .hstat-val{font-size:28px;font-weight:900;color:var(--gold);}
 .hstat-label{font-size:10px;color:rgba(255,255,255,0.6);margin-top:2px;}
-
-/* ===== RACE CARD GRID ===== */
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
 .section-title{font-size:13px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px;}
 .section-title::before{content:'';width:3px;height:14px;background:var(--green);border-radius:2px;display:inline-block;}
-
 .race-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px;}
-.race-card{
-  background:var(--card);border:1px solid var(--border);border-radius:12px;
-  padding:14px 16px;cursor:pointer;transition:all 0.2s;
-}
+.race-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;cursor:pointer;transition:all 0.2s;}
 .race-card:hover{border-color:var(--green);transform:translateY(-1px);box-shadow:0 4px 20px rgba(13,148,136,0.2);}
 .rc-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;}
-.rc-num{
-  background:var(--green);color:#fff;font-size:10px;font-weight:700;
-  padding:2px 8px;border-radius:4px;
-}
+.rc-num{background:var(--green);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;}
 .rc-course{font-size:11px;color:var(--muted);}
 .rc-name{font-size:15px;font-weight:800;margin-bottom:6px;}
 .rc-cond{display:flex;gap:6px;flex-wrap:wrap;}
 .rc-tag{background:var(--dark);border:1px solid var(--border);padding:2px 7px;border-radius:4px;font-size:10px;color:var(--muted);}
 .rc-footer{margin-top:10px;display:flex;align-items:center;justify-content:space-between;}
 .rc-count{font-size:11px;color:var(--muted);}
-
-/* ===== RACE DETAIL ===== */
-.race-hero{
-  background:linear-gradient(135deg,var(--dark2) 0%,#0f3d35 100%);
-  border-radius:12px;padding:20px 24px;margin-bottom:16px;
-  display:flex;align-items:center;justify-content:space-between;
-  border:1px solid var(--border);position:relative;overflow:hidden;
-}
-.race-hero::after{
-  content:'🏇';font-size:100px;position:absolute;right:16px;bottom:-10px;
-  opacity:0.1;transform:scaleX(-1);
-}
+.race-hero{background:linear-gradient(135deg,var(--dark2) 0%,#0f3d35 100%);border-radius:12px;padding:20px 24px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);position:relative;overflow:hidden;}
+.race-hero::after{content:'🏇';font-size:100px;position:absolute;right:16px;bottom:-10px;opacity:0.1;transform:scaleX(-1);}
 .rh-venue{font-size:11px;color:var(--muted);margin-bottom:3px;}
 .rh-title{font-size:22px;font-weight:900;margin-bottom:6px;}
-.rh-cond{display:flex;gap:8px;}
+.rh-cond{display:flex;gap:8px;flex-wrap:wrap;}
 .rh-tag{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);padding:2px 9px;border-radius:4px;font-size:11px;color:rgba(255,255,255,0.7);}
-.top-badge{
-  background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);
-  border-radius:10px;padding:12px 18px;text-align:center;min-width:130px;z-index:1;
-}
-.tb-label{font-size:10px;color:var(--gold);margin-bottom:2px;}
-.tb-name{font-size:14px;font-weight:800;margin-bottom:4px;}
-.tb-score{font-size:38px;font-weight:900;color:var(--gold);line-height:1;}
-.tb-sub{font-size:10px;color:var(--muted);}
-
+.rh-actions{display:flex;gap:8px;align-items:center;z-index:1;}
 .grid2{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px;}
-.grid1-1{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;}
 .card-title{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:5px;}
 .card-title::before{content:'';width:3px;height:12px;background:var(--green);border-radius:2px;display:inline-block;}
-
-/* ===== HORSE TABLE ===== */
 .htable{width:100%;border-collapse:collapse;font-size:11px;}
 .htable th{background:var(--dark);color:var(--muted);font-weight:600;padding:5px 7px;text-align:center;border-bottom:1px solid var(--border);white-space:nowrap;}
 .htable td{padding:6px 7px;border-bottom:1px solid var(--border);text-align:center;vertical-align:middle;}
 .htable tr:hover td{background:rgba(255,255,255,0.03);}
 .frame-badge{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:10px;}
-.f1{background:#e2e8f0;color:#1e293b;}
-.f2{background:#1e293b;color:#fff;border:1px solid #64748b;}
-.f3{background:#ef4444;}
-.f4{background:#3b82f6;}
-.f5{background:#f59e0b;}
-.f6{background:#10b981;}
-.f7{background:#f97316;}
-.f8{background:#ec4899;}
+.f1{background:#e2e8f0;color:#1e293b;}.f2{background:#1e293b;color:#fff;border:1px solid #64748b;}
+.f3{background:#ef4444;}.f4{background:#3b82f6;}.f5{background:#f59e0b;}
+.f6{background:#10b981;}.f7{background:#f97316;}.f8{background:#ec4899;}
 .name-cell{text-align:left!important;font-weight:700;}
 .prob-bar{display:flex;align-items:center;gap:4px;}
 .prob-track{flex:1;height:5px;background:var(--dark);border-radius:3px;overflow:hidden;}
 .prob-fill{height:100%;border-radius:3px;}
 .score-num{font-size:11px;font-weight:700;min-width:22px;text-align:right;}
-
-/* ===== RECOMMENDATIONS ===== */
-.no-bet{
-  text-align:center;padding:28px;color:var(--muted);
-  background:var(--dark);border-radius:8px;border:1px dashed var(--border);
-}
+.no-bet{text-align:center;padding:28px;color:var(--muted);background:var(--dark);border-radius:8px;border:1px dashed var(--border);}
 .no-bet-icon{font-size:32px;margin-bottom:8px;}
 .rec-list{display:grid;gap:8px;}
-.rec-item{
-  background:var(--card2);border:1px solid var(--border);border-radius:10px;
-  padding:10px 14px;display:flex;align-items:center;justify-content:space-between;
-  transition:border-color 0.15s;
-}
+.rec-item{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;transition:border-color 0.15s;}
 .rec-item:hover{border-color:var(--green);}
 .rec-left{display:flex;align-items:center;gap:10px;}
 .bet-badge{padding:3px 9px;border-radius:5px;font-size:10px;font-weight:700;white-space:nowrap;}
@@ -203,56 +109,13 @@ body{font-family:'Hiragino Sans','Meiryo',sans-serif;background:var(--dark);colo
 .rec-odds{font-size:18px;font-weight:900;color:var(--gold);}
 .rec-ev{font-size:10px;color:var(--green2);}
 .rec-stake{font-size:10px;color:var(--muted);}
-.rec-log-btn{
-  margin-left:10px;background:rgba(13,148,136,0.15);border:1px solid rgba(13,148,136,0.3);
-  color:var(--green2);padding:3px 8px;border-radius:5px;font-size:10px;cursor:pointer;
-}
-.rec-log-btn:hover{background:rgba(13,148,136,0.3);}
-.rec-log-btn.logged{background:rgba(16,185,129,0.15);color:#10b981;cursor:default;}
-.total-bar{
-  background:linear-gradient(90deg,var(--green),var(--green2));border-radius:8px;
-  padding:11px 16px;color:#fff;display:flex;align-items:center;justify-content:space-between;margin-top:10px;
-}
+.total-bar{background:linear-gradient(90deg,var(--green),var(--green2));border-radius:8px;padding:11px 16px;color:#fff;display:flex;align-items:center;justify-content:space-between;margin-top:10px;}
 .total-label{font-size:10px;opacity:0.75;}
 .total-val{font-size:18px;font-weight:900;}
-
-/* ===== STATS ===== */
 .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .stat-item{text-align:center;padding:10px;background:var(--dark);border-radius:8px;}
 .stat-val{font-size:22px;font-weight:900;color:var(--green2);}
 .stat-label{font-size:10px;color:var(--muted);margin-top:2px;}
-
-/* ===== SEARCH PAGE ===== */
-.search-form{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:16px;}
-.form-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px;}
-.form-group label{font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;}
-.form-group select,.form-group input[type=date],.form-group input[type=text]{
-  width:100%;padding:7px 10px;background:var(--dark);border:1px solid var(--border);
-  color:var(--text);border-radius:6px;font-size:12px;
-}
-.rtable{width:100%;border-collapse:collapse;font-size:12px;background:var(--card);border-radius:12px;overflow:hidden;border:1px solid var(--border);}
-.rtable th{background:var(--dark2);color:var(--muted);font-weight:600;padding:9px 12px;text-align:left;border-bottom:1px solid var(--border);}
-.rtable td{padding:9px 12px;border-bottom:1px solid var(--border);}
-.rtable tr:hover td{background:rgba(255,255,255,0.03);cursor:pointer;}
-.grade-g1{background:rgba(245,158,11,0.2);color:#f59e0b;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;}
-.grade-g2{background:rgba(59,130,246,0.2);color:#3b82f6;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;}
-.grade-g3{background:rgba(168,85,247,0.2);color:#a855f7;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;}
-.grade-op{background:rgba(148,163,184,0.15);color:#94a3b8;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;}
-
-/* ===== HORSE PAGE ===== */
-.horse-search-bar{display:flex;gap:8px;margin-bottom:16px;}
-.horse-search-bar input{flex:1;padding:9px 14px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:13px;}
-.horse-search-bar input::placeholder{color:var(--muted);}
-.horse-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
-.horse-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;transition:border-color 0.15s;}
-.horse-card:hover{border-color:var(--green);}
-.hc-name{font-size:15px;font-weight:800;margin-bottom:3px;}
-.hc-info{font-size:11px;color:var(--muted);}
-.hc-score{font-size:26px;font-weight:900;color:var(--green2);}
-.hc-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;}
-.hc-tag{background:var(--dark);border:1px solid var(--border);padding:2px 6px;border-radius:4px;font-size:10px;color:var(--muted);}
-
-/* ===== ANALYSIS PAGE ===== */
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
 .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;}
 .kpi-val{font-size:30px;font-weight:900;color:var(--green2);}
@@ -262,38 +125,21 @@ body{font-family:'Hiragino Sans','Meiryo',sans-serif;background:var(--dark);colo
 .chart-pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
 .chart-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;}
 .chart-wrap{height:200px;position:relative;}
-
-/* ===== LOG PAGE ===== */
 .log-table{width:100%;border-collapse:collapse;font-size:12px;background:var(--card);border-radius:12px;overflow:hidden;border:1px solid var(--border);}
-.log-table th{background:var(--dark2);color:var(--muted);font-weight:600;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);}
-.log-table td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.log-table th{background:var(--dark2);color:var(--muted);font-weight:600;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+.log-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.log-table tr:hover td{background:rgba(255,255,255,0.02);}
 .hit-yes{color:#10b981;font-weight:700;}
 .hit-no{color:var(--red);font-weight:700;}
 .hit-pending{color:var(--muted);}
 .btn-hit{background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.3);color:#10b981;padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;margin-right:4px;}
 .btn-miss{background:rgba(244,63,94,0.2);border:1px solid rgba(244,63,94,0.3);color:var(--red);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;}
-
-/* ===== SETTINGS ===== */
-.settings-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:14px;}
-.settings-title{font-size:13px;font-weight:700;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border);color:var(--text);}
-.setting-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04);}
-.setting-row:last-child{border-bottom:none;}
-.setting-label{font-size:12px;font-weight:600;}
-.setting-desc{font-size:10px;color:var(--muted);margin-top:2px;}
-.setting-input{
-  padding:5px 10px;background:var(--dark);border:1px solid var(--border);
-  color:var(--text);border-radius:6px;font-size:13px;width:110px;text-align:right;
-}
-
-/* ===== UTILS ===== */
 .loading{display:flex;align-items:center;justify-content:center;padding:40px;color:var(--muted);gap:10px;flex-direction:column;}
 .spinner{width:22px;height:22px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 0.8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .toast{position:fixed;bottom:20px;right:20px;background:var(--card2);border:1px solid var(--border);color:var(--text);padding:10px 16px;border-radius:8px;font-size:12px;z-index:9999;opacity:0;transform:translateY(8px);transition:all 0.25s;}
 .toast.show{opacity:1;transform:translateY(0);}
 .empty{text-align:center;padding:40px;color:var(--muted);font-size:13px;}
-.date-picker-row{display:flex;gap:8px;align-items:center;margin-bottom:14px;}
-.date-label{font-size:12px;color:var(--muted);}
 input[type=date]{color-scheme:dark;}
 </style>
 </head>
@@ -308,10 +154,8 @@ input[type=date]{color-scheme:dark;}
   <nav class="nav">
     <div class="nav-item active" onclick="switchPage('home',this)"><span class="nav-icon">🏠</span>ホーム</div>
     <div class="nav-item" onclick="switchPage('search',this)"><span class="nav-icon">🔍</span>レース検索</div>
-    <div class="nav-item" onclick="switchPage('horses',this)"><span class="nav-icon">🏇</span>馬データベース</div>
     <div class="nav-item" onclick="switchPage('analysis',this)"><span class="nav-icon">📊</span>成績分析</div>
     <div class="nav-item" onclick="switchPage('log',this)"><span class="nav-icon">📋</span>買い目ログ</div>
-    <div class="nav-item" onclick="switchPage('settings',this)"><span class="nav-icon">⚙️</span>設定</div>
   </nav>
   <div class="sidebar-footer">
     <div class="status-pill">
@@ -326,17 +170,13 @@ input[type=date]{color-scheme:dark;}
 
   <!-- TOPBAR -->
   <header class="topbar">
-    <div class="search-bar" id="topbarSearch">
-      <input class="race-input" id="raceIdInput" type="text" placeholder="レースID（例: 202106060511）">
-      <button class="btn btn-green" onclick="loadRace()">🔍 予測実行</button>
-    </div>
-    <div id="topbarRight" style="font-size:11px;color:var(--muted)" id="lastUpdated"></div>
+    <div class="topbar-title" id="topbarTitle">🏇 EQUINOX JRA AI予想</div>
+    <div style="font-size:11px;color:var(--muted)" id="topbarRight"></div>
   </header>
 
   <!-- ===== HOME ===== -->
   <div class="content page active" id="page-home">
 
-    <!-- HERO -->
     <div class="home-hero">
       <div class="hero-left">
         <h1>JRA AI 予想ツール</h1>
@@ -348,18 +188,9 @@ input[type=date]{color-scheme:dark;}
         </div>
       </div>
       <div class="hero-stats">
-        <div class="hstat">
-          <div class="hstat-val">17,283</div>
-          <div class="hstat-label">検証レース数</div>
-        </div>
-        <div class="hstat">
-          <div class="hstat-val">42.3%</div>
-          <div class="hstat-label">複勝的中率</div>
-        </div>
-        <div class="hstat">
-          <div class="hstat-val">123.5%</div>
-          <div class="hstat-label">複勝回収率</div>
-        </div>
+        <div class="hstat"><div class="hstat-val">17,283</div><div class="hstat-label">検証レース数</div></div>
+        <div class="hstat"><div class="hstat-val">42.3%</div><div class="hstat-label">複勝的中率</div></div>
+        <div class="hstat"><div class="hstat-val">123.5%</div><div class="hstat-label">複勝回収率</div></div>
       </div>
     </div>
 
@@ -368,10 +199,10 @@ input[type=date]{color-scheme:dark;}
       <div style="font-size:13px;font-weight:700;color:var(--green2);margin-bottom:10px;">🔗 netkeibaのURLから予測</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">
         netkeibaで見たいレースの出走表ページを開き、URLをそのまま貼り付けてください。<br>
-        例: <code style="background:var(--dark);padding:2px 6px;border-radius:4px;font-size:10px;">https://race.netkeiba.com/race/shutuba.html?race_id=202609030411</code>
+        例: <code style="background:var(--dark);padding:2px 6px;border-radius:4px;font-size:10px;">https://race.netkeiba.com/race/shutuba_past.html?race_id=202609030411</code>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <input type="text" id="urlInput" placeholder="https://race.netkeiba.com/race/shutuba.html?race_id=..."
+        <input type="text" id="urlInput" placeholder="https://race.netkeiba.com/race/shutuba_past.html?race_id=..."
           style="flex:1;background:var(--dark);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:12px;"
           onkeydown="if(event.key==='Enter')predictFromUrl()">
         <button class="btn btn-gold" onclick="predictFromUrl()" id="urlPredictBtn">⚡ 予測する</button>
@@ -379,96 +210,70 @@ input[type=date]{color-scheme:dark;}
       <div id="urlPredictStatus" style="margin-top:8px;font-size:11px;color:var(--muted);display:none;"></div>
     </div>
 
-    <!-- TODAY'S RACES -->
+    <!-- REGISTERED RACES LIST -->
     <div class="section-header">
-      <div class="section-title">📅 レース一覧</div>
+      <div class="section-title">📋 登録済みレース一覧</div>
       <div style="display:flex;gap:8px;align-items:center">
-        <input type="date" id="todayDate" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-size:11px;" onchange="loadTodayRaces()">
-        <button class="btn btn-outline btn-sm" onclick="setLatestDate()">📅 最新日</button>
-        <button class="btn btn-green btn-sm" onclick="predictAllVisible()">⚡ 全件予測</button>
+        <input type="date" id="regDate" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-size:11px;" onchange="loadRegisteredRaces()">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('regDate').value='';loadRegisteredRaces()">全件</button>
       </div>
     </div>
-
-    <div id="todayRaceCards" class="race-cards">
-      <div class="empty">日付を選択するか「最新日」ボタンを押してください</div>
+    <div id="registeredRaceCards" class="race-cards">
+      <div class="empty">URLを貼って予測→登録するとここに表示されます</div>
     </div>
 
-    <!-- RACE DETAIL (hidden until predict) -->
-    <div id="raceDetail" style="display:none">
-    </div>
+    <!-- RACE DETAIL -->
+    <div id="raceDetail" style="display:none"></div>
 
   </div>
 
-  <!-- ===== SEARCH ===== -->
+  <!-- ===== SEARCH (登録済みレース検索) ===== -->
   <div class="content page" id="page-search">
-    <div class="search-form">
-      <div style="font-size:14px;font-weight:700;margin-bottom:14px">🔍 レース検索</div>
-      <div class="form-row">
-        <div class="form-group"><label>開催日</label><input type="date" id="s-date"></div>
-        <div class="form-group"><label>競馬場</label>
-          <select id="s-course">
-            <option value="">すべて</option>
-            <option>札幌</option><option>函館</option><option>福島</option><option>新潟</option>
-            <option>東京</option><option>中山</option><option>中京</option><option>京都</option>
-            <option>阪神</option><option>小倉</option>
-          </select>
-        </div>
-        <div class="form-group"><label>馬場</label>
-          <select id="s-surface"><option value="">すべて</option><option>芝</option><option>ダート</option></select>
-        </div>
-        <div class="form-group" style="align-self:flex-end">
-          <button class="btn btn-green" onclick="searchRaces()" style="width:100%">検索</button>
-        </div>
+    <div style="font-size:14px;font-weight:700;margin-bottom:14px">🔍 登録済みレース検索</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-bottom:14px;display:flex;gap:10px;align-items:flex-end;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px">開催日</div>
+        <input type="date" id="sq-date" style="padding:7px 10px;background:var(--dark);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:12px;">
       </div>
+      <button class="btn btn-green" onclick="searchRegistered()">検索</button>
+      <button class="btn btn-outline" onclick="document.getElementById('sq-date').value='';searchRegistered()">全件表示</button>
     </div>
-    <table class="rtable" id="raceListTable">
-      <thead><tr><th>開催日</th><th>競馬場</th><th>R</th><th>レース名</th><th>条件</th><th>距離</th><th>頭数</th><th></th></tr></thead>
-      <tbody id="raceListBody">
-        <tr><td colspan="8" class="empty">条件を入力して検索してください</td></tr>
+    <table class="log-table" id="searchResultTable">
+      <thead><tr><th>開催日</th><th>競馬場</th><th>R</th><th>レース名</th><th>馬場</th><th>距離</th><th>頭数</th><th>買い目</th><th></th></tr></thead>
+      <tbody id="searchResultBody">
+        <tr><td colspan="9" class="empty">検索してください</td></tr>
       </tbody>
     </table>
-  </div>
-
-  <!-- ===== HORSES ===== -->
-  <div class="content page" id="page-horses">
-    <div style="font-size:14px;font-weight:700;margin-bottom:14px">🏇 馬データベース</div>
-    <div class="horse-search-bar">
-      <input type="text" id="horseQ" placeholder="馬名で検索（例：ステラリア）" oninput="searchHorses(this.value)">
-      <button class="btn btn-green" onclick="searchHorses(document.getElementById('horseQ').value)">検索</button>
-    </div>
-    <div class="horse-grid" id="horseGrid">
-      <div style="grid-column:1/-1" class="empty">馬名を入力して検索してください</div>
-    </div>
   </div>
 
   <!-- ===== ANALYSIS ===== -->
   <div class="content page" id="page-analysis">
     <div style="font-size:14px;font-weight:700;margin-bottom:14px">📊 成績分析</div>
 
-    <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">▌ バックテスト実績（2016〜2021年）</div>
-    <div class="kpi-grid" id="backtestKpi">
-      <div class="kpi-card"><div class="loading"><div class="spinner"></div></div></div>
-      <div class="kpi-card"><div class="loading"><div class="spinner"></div></div></div>
-      <div class="kpi-card"><div class="loading"><div class="spinner"></div></div></div>
-      <div class="kpi-card"><div class="loading"><div class="spinner"></div></div></div>
+    <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">▌ バックテスト実績（2010〜2021年・複勝）</div>
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-val">42.3%</div><div class="kpi-label">複勝的中率</div><div class="kpi-sub">2010〜2021年</div></div>
+      <div class="kpi-card"><div class="kpi-val gold">123.5%</div><div class="kpi-label">複勝回収率</div><div class="kpi-sub">17,283レース</div></div>
+      <div class="kpi-card"><div class="kpi-val">EV≥1.10</div><div class="kpi-label">買い目条件</div><div class="kpi-sub">期待値フィルター</div></div>
+      <div class="kpi-card"><div class="kpi-val">LGB</div><div class="kpi-label">モデル</div><div class="kpi-sub">LightGBM + Isotonic</div></div>
     </div>
 
-    <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;margin-top:18px">▌ 実績ログ（ツール使用中の実績）</div>
+    <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;margin-top:18px">▌ 実績（登録レースの複勝）</div>
     <div class="kpi-grid" id="actualKpi">
-      <div class="kpi-card"><div class="kpi-val" id="ak-bets">—</div><div class="kpi-label">ベット数</div></div>
-      <div class="kpi-card"><div class="kpi-val" id="ak-hit">—</div><div class="kpi-label">的中率</div></div>
+      <div class="kpi-card"><div class="kpi-val" id="ak-bets">—</div><div class="kpi-label">買い目数</div></div>
+      <div class="kpi-card"><div class="kpi-val" id="ak-hit">—</div><div class="kpi-label">複勝的中率</div></div>
       <div class="kpi-card"><div class="kpi-val gold" id="ak-roi">—</div><div class="kpi-label">回収率</div></div>
-      <div class="kpi-card"><div class="kpi-val" id="ak-profit">—</div><div class="kpi-label">収支</div></div>
+      <div class="kpi-card"><div class="kpi-val" id="ak-profit">—</div><div class="kpi-label">収支(100円/bet)</div></div>
     </div>
 
     <div class="chart-pair">
       <div class="chart-card">
-        <div class="card-title">月別回収率推移（バックテスト）</div>
+        <div class="card-title">月別複勝回収率</div>
         <div class="chart-wrap"><canvas id="roiChart"></canvas></div>
       </div>
       <div class="chart-card">
-        <div class="card-title">馬券種別 回収率</div>
-        <div class="chart-wrap"><canvas id="betTypeChart"></canvas></div>
+        <div class="card-title">月別複勝的中率</div>
+        <div class="chart-wrap"><canvas id="hitChart"></canvas></div>
       </div>
     </div>
   </div>
@@ -476,43 +281,19 @@ input[type=date]{color-scheme:dark;}
   <!-- ===== LOG ===== -->
   <div class="content page" id="page-log">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="font-size:14px;font-weight:700">📋 買い目ログ</div>
-      <button class="btn btn-outline btn-sm" onclick="loadLog()">🔄 更新</button>
+      <div style="font-size:14px;font-weight:700">📋 買い目ログ（複勝）</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="date" id="logDate" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:11px;" onchange="loadLog()">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('logDate').value='';loadLog()">全件</button>
+        <button class="btn btn-outline btn-sm" onclick="loadLog()">🔄 更新</button>
+      </div>
     </div>
     <table class="log-table" id="logTable">
-      <thead><tr><th>日時</th><th>レース</th><th>馬券種</th><th>組合せ</th><th>オッズ</th><th>期待値</th><th>購入額</th><th>結果</th><th>払戻</th><th>操作</th></tr></thead>
+      <thead><tr><th>開催日</th><th>競馬場・R</th><th>条件</th><th>レース名</th><th>複勝買い目</th><th>オッズ</th><th>期待値</th><th>結果</th><th>操作</th></tr></thead>
       <tbody id="logBody">
-        <tr><td colspan="10" class="empty">ログなし</td></tr>
+        <tr><td colspan="9" class="empty">ログなし</td></tr>
       </tbody>
     </table>
-  </div>
-
-  <!-- ===== SETTINGS ===== -->
-  <div class="content page" id="page-settings">
-    <div style="font-size:14px;font-weight:700;margin-bottom:14px">⚙️ 設定</div>
-    <div class="settings-card">
-      <div class="settings-title">🎯 期待値閾値（この値以上の馬券のみ推奨）</div>
-      <div class="setting-row">
-        <div><div class="setting-label">複勝 閾値</div><div class="setting-desc">推奨: 1.10〜1.30</div></div>
-        <input class="setting-input" id="cfg-fukusho" type="number" value="1.10" step="0.05" min="1.0" max="2.0">
-      </div>
-      <div class="setting-row">
-        <div><div class="setting-label">ワイド 閾値</div><div class="setting-desc">推奨: 1.15〜1.40</div></div>
-        <input class="setting-input" id="cfg-wide" type="number" value="1.15" step="0.05" min="1.0" max="2.0">
-      </div>
-      <div class="setting-row">
-        <div><div class="setting-label">3連複 閾値</div><div class="setting-desc">推奨: 1.25〜1.60</div></div>
-        <input class="setting-input" id="cfg-sanrenpuku" type="number" value="1.25" step="0.05" min="1.0" max="2.0">
-      </div>
-    </div>
-    <div class="settings-card">
-      <div class="settings-title">💰 資金管理</div>
-      <div class="setting-row">
-        <div><div class="setting-label">1レースあたりの予算</div><div class="setting-desc">ケリー基準の計算に使用</div></div>
-        <input class="setting-input" id="cfg-budget" type="number" value="10000" step="1000">
-      </div>
-    </div>
-    <button class="btn btn-green" onclick="saveSettings()">💾 設定を保存</button>
   </div>
 
 </div>
@@ -521,25 +302,8 @@ input[type=date]{color-scheme:dark;}
 
 <script>
 const FRAME_COLORS=['f1','f2','f3','f4','f5','f6','f7','f8'];
-let radarChart=null, roiChart=null, betTypeChart=null;
-let analysisLoaded=false;
-
-// ===== SETTINGS =====
-function loadSettings(){
-  ['fukusho','wide','sanrenpuku','budget'].forEach(k=>{
-    const v=localStorage.getItem('cfg-'+k);
-    const el=document.getElementById('cfg-'+k);
-    if(v&&el) el.value=v;
-  });
-}
-function saveSettings(){
-  ['fukusho','wide','sanrenpuku','budget'].forEach(k=>{
-    const el=document.getElementById('cfg-'+k);
-    if(el) localStorage.setItem('cfg-'+k,el.value);
-  });
-  showToast('✅ 設定を保存しました');
-}
-function getThreshold(){ return parseFloat(document.getElementById('cfg-fukusho')?.value||'1.10'); }
+let roiChart=null, hitChart=null, analysisLoaded=false;
+let _currentRaceData=null;
 
 // ===== PAGE SWITCH =====
 function switchPage(page,navEl){
@@ -547,12 +311,12 @@ function switchPage(page,navEl){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   navEl.classList.add('active');
-  document.getElementById('topbarSearch').style.visibility=page==='home'?'visible':'hidden';
-  if(page==='analysis'&&!analysisLoaded) loadAnalysis();
+  if(page==='analysis') loadAnalysis();
   if(page==='log') loadLog();
+  if(page==='search') searchRegistered();
 }
 
-// ===== STATUS POLL =====
+// ===== STATUS =====
 async function checkStatus(){
   try{
     const r=await fetch('/api/status');
@@ -572,20 +336,15 @@ async function predictFromUrl(){
   const btn=document.getElementById('urlPredictBtn');
   const status=document.getElementById('urlPredictStatus');
   btn.disabled=true;btn.textContent='処理中...';
-  status.style.display='block';
-  status.style.color='var(--muted)';
-  status.textContent='⏳ ブラウザで出走表を取得中（30秒程度かかります）...';
+  status.style.display='block';status.style.color='var(--muted)';
+  status.textContent='⏳ 出走表・オッズを取得中（1〜2分かかります）...';
   try{
-    const res=await fetch('/api/predict-url',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({url})
-    });
+    const res=await fetch('/api/predict-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url}),signal:AbortSignal.timeout(180000)});
     const j=await res.json();
     if(j.status!=='ok') throw new Error(j.message);
     status.style.color='#10b981';
     status.textContent=`✅ ${j.data.field_count}頭の出走表を取得 → 予測完了`;
-    // 予測ページに結果を表示
+    _currentRaceData=j.data;
     const detail=document.getElementById('raceDetail');
     detail.style.display='block';
     detail.innerHTML=renderRaceDetail(j.data);
@@ -593,122 +352,124 @@ async function predictFromUrl(){
     showToast('✅ URL予測完了！');
   }catch(e){
     status.style.color='var(--red)';
-    status.textContent='❌ '+e.message;
-    showToast('エラー: '+e.message);
+    status.textContent='❌ '+(e.name==='TimeoutError'?'タイムアウト（サーバーが応答しません）':e.message);
   }finally{
     btn.disabled=false;btn.textContent='⚡ 予測する';
   }
 }
 
-// ===== TODAY RACES =====
-async function setLatestDate(){
-  const el=document.getElementById('todayDate');
-  el.value='';
-  await loadTodayRaces();
-}
-
-async function loadTodayRaces(){
-  const d=document.getElementById('todayDate').value;
-  const container=document.getElementById('todayRaceCards');
+// ===== REGISTERED RACES =====
+async function loadRegisteredRaces(){
+  const d=document.getElementById('regDate').value;
+  const container=document.getElementById('registeredRaceCards');
   container.innerHTML='<div class="loading"><div class="spinner"></div>読み込み中...</div>';
-  document.getElementById('raceDetail').style.display='none';
   try{
-    const url='/api/today-races'+(d?'?date='+d:'');
-    const r=await fetch(url);
-    const j=await r.json();
-    if(j.status!=='ok') throw new Error(j.message);
-    if(!j.races.length){
-      container.innerHTML='<div class="empty">該当レースなし<br><span style="font-size:11px">DBには2016〜2021年のデータがあります</span></div>';
+    const url='/api/registered-races'+(d?'?date='+d:'');
+    const j=await(await fetch(url)).json();
+    if(!j.races||!j.races.length){
+      container.innerHTML='<div class="empty">登録済みレースなし<br><span style="font-size:11px">URLを貼って予測→登録するとここに表示されます</span></div>';
       return;
     }
-    if(j.date) document.getElementById('todayDate').value=j.date.substring?j.date.substring(0,10):j.date;
-    container.innerHTML=j.races.map(r=>raceCardHTML(r)).join('');
-  }catch(e){
-    container.innerHTML=`<div class="empty">エラー: ${e.message}</div>`;
-  }
+    container.innerHTML=j.races.map(r=>registeredCardHTML(r)).join('');
+  }catch(e){container.innerHTML=`<div class="empty">エラー: ${e.message}</div>`;}
 }
 
-function raceCardHTML(r){
+function registeredCardHTML(r){
   const surf=r.surface==='芝'?'🌿':'🟫';
-  return `<div class="race-card" onclick="loadRaceById('${r.race_id}')">
+  return `<div class="race-card" onclick="reloadRaceById('${r.race_id}')">
     <div class="rc-header">
       <span class="rc-num">${r.race_number}R</span>
-      <span class="rc-course">${r.course}</span>
+      <span class="rc-course">${r.course} ${r.date||''}</span>
     </div>
     <div class="rc-name">${r.race_name||r.race_id}</div>
     <div class="rc-cond">
-      <span class="rc-tag">${surf} ${r.surface}</span>
-      <span class="rc-tag">${r.distance}m</span>
-      <span class="rc-tag">${r.track_condition||'—'}</span>
+      <span class="rc-tag">${surf} ${r.surface||'—'}</span>
+      <span class="rc-tag">${r.distance||'—'}m</span>
+      <span class="rc-tag">${r.field_count||'—'}頭</span>
     </div>
     <div class="rc-footer">
-      <span class="rc-count">${r.field_count}頭</span>
-      <button class="btn btn-green btn-sm" onclick="event.stopPropagation();loadRaceById('${r.race_id}')">予測 →</button>
+      <span class="rc-count" style="font-size:10px;color:var(--muted)">${r.registered_at||''}</span>
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();refreshOdds('${r.race_id}',this)">🔄 オッズ更新</button>
+        <button class="btn btn-green btn-sm" onclick="event.stopPropagation();reloadRaceById('${r.race_id}')">再予測</button>
+      </div>
     </div>
   </div>`;
 }
 
-async function predictAllVisible(){
-  const cards=document.querySelectorAll('.race-card');
-  if(!cards.length){showToast('先にレース一覧を読み込んでください');return;}
-  // 最初のレースを予測（全件は処理が重いため1件目を表示）
-  const firstBtn=cards[0].querySelector('.btn');
-  if(firstBtn) firstBtn.click();
-  showToast('最初のレースを予測中... 個別ボタンで各レースを確認できます');
-}
-
-// ===== RACE PREDICT =====
-async function loadRaceById(raceId){
-  document.getElementById('raceIdInput').value=raceId;
-  loadRace();
-}
-
-async function loadRace(){
-  const raceId=document.getElementById('raceIdInput').value.trim();
-  if(!raceId){showToast('レースIDを入力してください');return;}
+async function reloadRaceById(raceId){
   const detail=document.getElementById('raceDetail');
   detail.style.display='block';
-  detail.innerHTML='<div class="loading" style="min-height:200px"><div class="spinner"></div><div>AIが予測計算中...</div></div>';
+  detail.innerHTML='<div class="loading" style="min-height:200px"><div class="spinner"></div><div>予測中...</div></div>';
   detail.scrollIntoView({behavior:'smooth',block:'start'});
   try{
-    const th=getThreshold();
-    const res=await fetch(`/api/race/${raceId}?threshold=${th}`);
+    // Use race_id input approach via predict-url with race_id directly
+    const res=await fetch('/api/race/'+raceId);
     const j=await res.json();
     if(j.status==='loading'){
-      detail.innerHTML=`<div class="loading" style="min-height:200px"><div class="spinner"></div><div>${j.message}</div></div>`;
+      detail.innerHTML=`<div class="loading"><div class="spinner"></div><div>${j.message}</div></div>`;
       return;
     }
-    if(j.status!=='ok') throw new Error(j.message);
+    if(j.status!=='ok') throw new Error(j.message||'予測失敗');
+    _currentRaceData=j.data;
     detail.innerHTML=renderRaceDetail(j.data);
-    document.getElementById('topbarRight').textContent='更新: '+new Date().toLocaleTimeString('ja-JP');
-    showToast('✅ 予測完了！');
+    showToast('✅ 予測完了');
   }catch(e){
     detail.innerHTML=`<div class="empty" style="color:var(--red)">⚠️ ${e.message}</div>`;
   }
 }
 
+async function refreshOdds(raceId, btn){
+  const orig=btn.textContent;
+  btn.disabled=true;btn.textContent='取得中...';
+  try{
+    const res=await fetch('/api/refresh-odds/'+raceId,{method:'POST'});
+    const j=await res.json();
+    if(j.status!=='ok') throw new Error(j.message);
+    showToast(`✅ オッズ更新完了（${j.updated}頭）`);
+    // Reload race if currently shown
+    if(_currentRaceData&&_currentRaceData.race_id===raceId) reloadRaceById(raceId);
+  }catch(e){showToast('❌ オッズ更新失敗: '+e.message);}
+  finally{btn.disabled=false;btn.textContent=orig;}
+}
+
+// ===== REGISTER RACE =====
+async function registerRace(data, btn){
+  if(btn.classList.contains('registered')){showToast('既に登録済みです');return;}
+  try{
+    const res=await fetch('/api/register-race',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const j=await res.json();
+    if(j.status!=='ok') throw new Error(j.message);
+    btn.textContent='✅ 登録済み';
+    btn.classList.add('registered');
+    btn.disabled=true;
+    const betMsg=j.saved_bets>0?`（複勝${j.saved_bets}点を買い目ログに保存）`:'（買い目なし）';
+    showToast('✅ レースを登録しました '+betMsg);
+    loadRegisteredRaces();
+  }catch(e){showToast('登録エラー: '+e.message);}
+}
+
+// ===== RENDER RACE DETAIL =====
 function renderRaceDetail(d){
-  const th=d.top_horse||{};
-  const recs=d.recommendations||[];
-  const totalStake=recs.reduce((s,r)=>s+r.stake,0);
-  const expReturn=d.stats?.expected_return||0;
+  const recs=(d.recommendations||[]).filter(r=>r.bet_type==='複勝');
+  const hasRec=recs.length>0;
+  const regData={...d, recommendations: recs};
   return `
   <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
   <div class="race-hero">
-    <div>
-      <div class="rh-venue">${d.venue} &nbsp;|&nbsp; ${d.date}</div>
-      <div class="rh-title">${d.race_name}</div>
+    <div style="z-index:1">
+      <div class="rh-venue">${d.venue||''} &nbsp;|&nbsp; ${d.date||''} &nbsp;${d.race_number?d.race_number+'R':''}</div>
+      <div class="rh-title">${d.race_name||d.race_id}</div>
       <div class="rh-cond">
-        ${(d.conditions||`${d.surface||''} / ${d.distance||''}m`).split('/').map(c=>`<span class="rh-tag">${c.trim()}</span>`).join('')}
+        ${d.surface?`<span class="rh-tag">${d.surface}</span>`:''}
+        ${d.distance?`<span class="rh-tag">${d.distance}m</span>`:''}
         <span class="rh-tag">出走 ${d.field_count}頭</span>
       </div>
     </div>
-    ${th.name?`<div class="top-badge">
-      <div class="tb-label">⚡ AI本命</div>
-      <div class="tb-name">${th.name}</div>
-      <div class="tb-score">${th.score}</div>
-      <div class="tb-sub">AIスコア</div>
-    </div>`:''}
+    <div class="rh-actions">
+      <button class="btn btn-outline btn-sm" onclick="refreshOdds('${d.race_id}',this)">🔄 オッズ更新</button>
+      <button class="btn btn-green btn-sm" id="regBtn-${d.race_id}" onclick="registerRace(${JSON.stringify(regData).replace(/"/g,'&quot;')},this)">⭐ 登録</button>
+    </div>
   </div>
 
   <div class="grid2">
@@ -718,12 +479,8 @@ function renderRaceDetail(d){
     </div>
     <div style="display:flex;flex-direction:column;gap:12px">
       <div class="card">
-        <div class="card-title">🎯 おすすめ買い目</div>
-        ${recsHTML(recs, d.race_id, d.race_name)}
-        ${recs.length?`<div class="total-bar">
-          <div><div class="total-label">合計購入</div><div class="total-val">¥${totalStake.toLocaleString()}</div></div>
-          <div style="text-align:right"><div class="total-label">期待回収</div><div class="total-val">¥${expReturn.toLocaleString()}</div></div>
-        </div>`:''}
+        <div class="card-title">🎯 複勝おすすめ買い目</div>
+        ${recsHTML(recs)}
       </div>
       <div class="card">
         <div class="card-title">バックテスト実績</div>
@@ -738,8 +495,7 @@ function renderRaceDetail(d){
 }
 
 function horseTableHTML(horses){
-  // Sort by place_ev desc if available, else by place_prob desc
-  const sorted=[...horses].sort((a,b)=>(b.place_ev||b.place_prob*0)-(a.place_ev||a.place_prob*0)||b.place_prob-a.place_prob);
+  const sorted=[...horses].sort((a,b)=>(b.place_ev||0)-(a.place_ev||0)||b.place_prob-a.place_prob);
   const hasOdds=horses.some(h=>h.win_odds>0);
   return `<table class="htable">
     <thead><tr><th>枠</th><th>馬番</th><th>馬名</th><th>性齢</th><th>騎手</th><th>単勝</th><th>複勝</th><th>人気</th><th>複勝確率</th>${hasOdds?'<th>複勝EV</th>':''}</tr></thead>
@@ -751,12 +507,12 @@ function horseTableHTML(horses){
       const evCol=ev>=1.3?'#10b981':ev>=1.1?'#f59e0b':'#64748b';
       const evStr=ev?`<span style="color:${evCol};font-weight:700">${ev.toFixed(2)}</span>`:'-';
       return `<tr style="${ev>=1.1?'background:rgba(16,185,129,0.06)':''}">
-        <td><span class="frame-badge ${fr}">${h.frame}</span></td>
+        <td><span class="frame-badge ${fr}">${h.frame||'-'}</span></td>
         <td style="font-weight:700">${h.number}</td>
         <td class="name-cell">${h.name}</td>
         <td>${h.sex_age||'-'}</td>
         <td>${h.jockey||'-'}</td>
-        <td style="color:${h.win_odds<=5?'#f59e0b':h.win_odds<=15?'#94a3b8':'#64748b'};font-weight:600">${h.win_odds||'-'}</td>
+        <td style="color:${h.win_odds>0&&h.win_odds<=5?'#f59e0b':h.win_odds<=15?'#94a3b8':'#64748b'};font-weight:600">${h.win_odds||'-'}</td>
         <td style="color:var(--muted)">${h.place_odds||'-'}</td>
         <td><span style="background:var(--dark);padding:2px 6px;border-radius:4px;font-size:10px">${h.popularity?h.popularity+'人気':'-'}</span></td>
         <td><div class="prob-bar"><div class="prob-track"><div class="prob-fill" style="width:${Math.min(pct*3,100)}%;background:${col}"></div></div><span class="score-num" style="color:${col}">${pct}%</span></div></td>
@@ -766,168 +522,133 @@ function horseTableHTML(horses){
   </table>`;
 }
 
-function recsHTML(recs, raceId, raceName){
-  if(!recs.length) return `<div class="no-bet">
-    <div class="no-bet-icon">🚫</div>
-    <div style="font-weight:700;margin-bottom:4px">買い目なし</div>
-    <div style="font-size:11px">期待値が閾値を超える馬券がありません<br>設定で閾値を下げると候補が増えます</div>
-  </div>`;
-  const btClass={'複勝':'bt-fukusho','ワイド':'bt-wide','3連複':'bt-sanren','単勝':'bt-tan'};
+function recsHTML(recs){
+  if(!recs.length) return `<div class="no-bet"><div class="no-bet-icon">🚫</div><div style="font-weight:700;margin-bottom:4px">買い目なし</div><div style="font-size:11px">EV≥1.10の複勝馬券がありません</div></div>`;
   return `<div class="rec-list">${recs.map(r=>`
     <div class="rec-item">
       <div class="rec-left">
-        <span class="bet-badge ${btClass[r.bet_type]||'bt-fukusho'}">${r.bet_type}</span>
+        <span class="bet-badge bt-fukusho">複勝</span>
         <div>
-          <div class="rec-combo">${r.combination}</div>
+          <div class="rec-combo">${r.combination}番</div>
           <div class="rec-prob">的中確率 ${(r.probability*100).toFixed(1)}%</div>
         </div>
       </div>
-      <div style="display:flex;align-items:center">
-        <div class="rec-right">
-          <div class="rec-odds">${r.odds}倍</div>
-          <div class="rec-ev">EV ${r.expected_value.toFixed(2)}</div>
-          <div class="rec-stake">¥${r.stake.toLocaleString()}</div>
-        </div>
-        <button class="rec-log-btn" onclick="logBet('${raceId}','${raceName}','${r.bet_type}','${r.combination}',${r.odds},${r.probability},${r.expected_value},${r.stake},this)">📝</button>
+      <div class="rec-right">
+        <div class="rec-odds">${r.odds}倍</div>
+        <div class="rec-ev">EV ${r.expected_value.toFixed(2)}</div>
       </div>
     </div>`).join('')}</div>`;
 }
 
-async function logBet(raceId, raceName, betType, combo, odds, prob, ev, stake, btn){
-  if(btn.classList.contains('logged')){showToast('既に記録済みです');return;}
-  try{
-    await fetch('/api/log/bets',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({race_id:raceId,race_name:raceName,bet_type:betType,combination:combo,odds,probability:prob,expected_value:ev,stake})});
-    btn.textContent='✅';
-    btn.classList.add('logged');
-    showToast('買い目をログに記録しました');
-  }catch(e){showToast('記録エラー: '+e.message);}
-}
-
 // ===== SEARCH =====
-async function searchRaces(){
-  const date=document.getElementById('s-date').value;
-  const course=document.getElementById('s-course').value;
-  const surface=document.getElementById('s-surface').value;
-  const tbody=document.getElementById('raceListBody');
-  tbody.innerHTML='<tr><td colspan="8" class="empty"><div class="loading"><div class="spinner"></div></div></td></tr>';
+async function searchRegistered(){
+  const date=document.getElementById('sq-date').value;
+  const tbody=document.getElementById('searchResultBody');
+  tbody.innerHTML='<tr><td colspan="9" class="empty"><div class="loading"><div class="spinner"></div></div></td></tr>';
   try{
-    const p=new URLSearchParams();
-    if(date) p.set('date',date);
-    if(course) p.set('course',course);
-    if(surface) p.set('surface',surface);
-    const j=await(await fetch('/api/races?'+p)).json();
-    if(j.status!=='ok') throw new Error(j.message);
-    if(!j.races.length){tbody.innerHTML='<tr><td colspan="8" class="empty">該当レースなし</td></tr>';return;}
+    const url='/api/registered-races'+(date?'?date='+date:'');
+    const j=await(await fetch(url)).json();
+    if(!j.races||!j.races.length){tbody.innerHTML='<tr><td colspan="9" class="empty">該当レースなし</td></tr>';return;}
     tbody.innerHTML=j.races.map(r=>{
-      const g=r.race_name.match(/G[123]/)?r.race_name.match(/G[123]/)[0]:'OP';
-      const cls=g==='G1'?'grade-g1':g==='G2'?'grade-g2':g==='G3'?'grade-g3':'grade-op';
-      return `<tr onclick="goToRace('${r.race_id}')">
-        <td>${r.date}</td><td>${r.course}</td><td>${r.race_number}R</td>
-        <td><span class="${cls}">${g}</span> ${r.race_name.replace(/G[123]/,'')}</td>
-        <td>${r.surface} ${r.track_condition}</td><td>${r.distance}m</td><td>${r.field_count}頭</td>
-        <td><button class="btn btn-green btn-sm" onclick="event.stopPropagation();goToRace('${r.race_id}')">予測</button></td>
+      return `<tr>
+        <td>${r.date||'—'}</td>
+        <td>${r.course||'—'}</td>
+        <td>${r.race_number||'—'}R</td>
+        <td style="font-weight:700">${r.race_name||r.race_id}</td>
+        <td>${r.surface||'—'}</td>
+        <td>${r.distance||'—'}m</td>
+        <td>${r.field_count||'—'}頭</td>
+        <td id="bet-count-${r.race_id}">—</td>
+        <td><button class="btn btn-green btn-sm" onclick="reloadRaceByIdAndSwitch('${r.race_id}')">再予測</button></td>
       </tr>`;
     }).join('');
-  }catch(e){tbody.innerHTML=`<tr><td colspan="8" class="empty" style="color:var(--red)">エラー: ${e.message}</td></tr>`;}
+    // Load bet counts
+    const bj=await(await fetch('/api/race-bets'+(date?'?date='+date:''))).json();
+    if(bj.bets){
+      const counts={};
+      bj.bets.forEach(b=>{counts[b.race_id]=(counts[b.race_id]||0)+1;});
+      Object.entries(counts).forEach(([id,c])=>{
+        const el=document.getElementById('bet-count-'+id);
+        if(el) el.innerHTML=`<span style="color:#10b981;font-weight:700">複勝${c}点</span>`;
+      });
+      // Set "なし" for races without bets
+      j.races.forEach(r=>{
+        if(!counts[r.race_id]){
+          const el=document.getElementById('bet-count-'+r.race_id);
+          if(el) el.innerHTML=`<span style="color:var(--muted)">買い目なし</span>`;
+        }
+      });
+    }
+  }catch(e){tbody.innerHTML=`<tr><td colspan="9" class="empty" style="color:var(--red)">エラー: ${e.message}</td></tr>`;}
 }
 
-function goToRace(id){
+function reloadRaceByIdAndSwitch(raceId){
   const nav=document.querySelectorAll('.nav-item')[0];
   switchPage('home',nav);
-  document.getElementById('raceIdInput').value=id;
-  loadRace();
-}
-
-// ===== HORSES =====
-let _horseTimer=null;
-function searchHorses(q){
-  clearTimeout(_horseTimer);
-  if(!q) return;
-  _horseTimer=setTimeout(()=>_doHorse(q),400);
-}
-async function _doHorse(q){
-  const grid=document.getElementById('horseGrid');
-  grid.innerHTML='<div style="grid-column:1/-1" class="empty"><div class="loading"><div class="spinner"></div></div></div>';
-  try{
-    const j=await(await fetch('/api/horses?q='+encodeURIComponent(q))).json();
-    if(!j.horses.length){grid.innerHTML='<div style="grid-column:1/-1" class="empty">該当なし</div>';return;}
-    grid.innerHTML=j.horses.map(h=>`
-      <div class="horse-card">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div><div class="hc-name">${h.name}</div><div class="hc-info">${h.sex_age}</div></div>
-          <div class="hc-score">${h.score}</div>
-        </div>
-        <div class="hc-tags">
-          <span class="hc-tag">${h.runs}戦</span>
-          <span class="hc-tag">勝率 ${h.win_rate}%</span>
-          <span class="hc-tag">複勝率 ${h.place_rate}%</span>
-        </div>
-      </div>`).join('');
-  }catch(e){grid.innerHTML=`<div style="grid-column:1/-1" class="empty" style="color:var(--red)">エラー: ${e.message}</div>`;}
+  setTimeout(()=>reloadRaceById(raceId),100);
 }
 
 // ===== ANALYSIS =====
 async function loadAnalysis(){
   try{
-    const j=await(await fetch('/api/stats')).json();
-    const bt=j.backtest, ac=j.actual;
-    document.getElementById('backtestKpi').innerHTML=`
-      <div class="kpi-card"><div class="kpi-val">${bt.fukusho_hit_rate}%</div><div class="kpi-label">複勝的中率</div><div class="kpi-sub">${bt.test_period}</div></div>
-      <div class="kpi-card"><div class="kpi-val gold">${bt.fukusho_roi}%</div><div class="kpi-label">複勝回収率</div><div class="kpi-sub">${bt.total_races.toLocaleString()}レース</div></div>
-      <div class="kpi-card"><div class="kpi-val">${bt.tan_hit_rate}%</div><div class="kpi-label">単勝的中率</div></div>
-      <div class="kpi-card"><div class="kpi-val gold">${bt.tan_roi}%</div><div class="kpi-label">単勝回収率</div></div>`;
-    document.getElementById('ak-bets').textContent=ac.total_bets||'0';
-    document.getElementById('ak-hit').textContent=ac.hit_rate!=null?ac.hit_rate+'%':'—';
-    document.getElementById('ak-roi').textContent=ac.roi!=null?ac.roi+'%':'—';
-    const pr=ac.profit||0;
+    const j=await(await fetch('/api/actual-stats')).json();
+    document.getElementById('ak-bets').textContent=j.total_bets||'0';
+    document.getElementById('ak-hit').textContent=j.hit_rate!=null?j.hit_rate+'%':'—';
+    document.getElementById('ak-roi').textContent=j.roi!=null?j.roi+'%':'—';
+    const pr=j.profit||0;
     const profEl=document.getElementById('ak-profit');
     profEl.textContent=(pr>=0?'+':'')+pr.toLocaleString()+'円';
     profEl.style.color=pr>=0?'var(--green2)':'var(--red)';
-    initCharts(bt);
-    analysisLoaded=true;
-  }catch(e){document.getElementById('backtestKpi').innerHTML=`<div style="grid-column:1/-1" class="empty" style="color:var(--red)">エラー: ${e.message}</div>`;}
-}
 
-function initCharts(bt){
-  const months=['1月','2月','3月','4月','5月','6月'];
-  if(roiChart) roiChart.destroy();
-  roiChart=new Chart(document.getElementById('roiChart'),{type:'line',data:{labels:months,datasets:[{label:'複勝回収率',data:bt.monthly_roi,borderColor:'#0d9488',backgroundColor:'rgba(13,148,136,0.15)',tension:0.3,fill:true,pointBackgroundColor:'#0d9488'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#94a3b8',font:{size:11}}}},scales:{x:{ticks:{color:'#94a3b8'}},y:{min:90,ticks:{color:'#94a3b8',callback:v=>v+'%'},grid:{color:'#334155'}}}}});
-  if(betTypeChart) betTypeChart.destroy();
-  betTypeChart=new Chart(document.getElementById('betTypeChart'),{type:'bar',data:{labels:['複勝','単勝'],datasets:[{label:'回収率',data:[bt.fukusho_roi,bt.tan_roi],backgroundColor:['rgba(13,148,136,0.7)','rgba(245,158,11,0.7)'],borderColor:['#0d9488','#f59e0b'],borderWidth:1,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#94a3b8'}},y:{min:90,ticks:{color:'#94a3b8',callback:v=>v+'%'},grid:{color:'#334155'}}}}});
+    if(roiChart) roiChart.destroy();
+    roiChart=new Chart(document.getElementById('roiChart'),{type:'line',data:{
+      labels:j.monthly_labels||[],
+      datasets:[{label:'複勝回収率',data:j.monthly_roi||[],borderColor:'#0d9488',backgroundColor:'rgba(13,148,136,0.15)',tension:0.3,fill:true,pointBackgroundColor:'#0d9488'}]
+    },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#94a3b8',font:{size:11}}}},scales:{x:{ticks:{color:'#94a3b8',maxRotation:45}},y:{ticks:{color:'#94a3b8',callback:v=>v+'%'},grid:{color:'#334155'}}}}});
+
+    if(hitChart) hitChart.destroy();
+    hitChart=new Chart(document.getElementById('hitChart'),{type:'bar',data:{
+      labels:j.monthly_labels||[],
+      datasets:[{label:'複勝的中率',data:j.monthly_hit_rate||[],backgroundColor:'rgba(59,130,246,0.7)',borderColor:'#3b82f6',borderWidth:1,borderRadius:4}]
+    },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#94a3b8',maxRotation:45}},y:{ticks:{color:'#94a3b8',callback:v=>v+'%'},grid:{color:'#334155'}}}}});
+
+    analysisLoaded=true;
+  }catch(e){console.error('Analysis load error:',e);}
 }
 
 // ===== LOG =====
 async function loadLog(){
+  const date=document.getElementById('logDate').value;
   const tbody=document.getElementById('logBody');
   try{
-    const j=await(await fetch('/api/log/bets?limit=100')).json();
-    if(!j.bets.length){tbody.innerHTML='<tr><td colspan="10" class="empty">ログなし</td></tr>';return;}
+    const url='/api/race-bets'+(date?'?date='+date:'');
+    const j=await(await fetch(url)).json();
+    if(!j.bets||!j.bets.length){tbody.innerHTML='<tr><td colspan="9" class="empty">ログなし</td></tr>';return;}
     tbody.innerHTML=j.bets.map(b=>{
       const hitTxt=b.hit===1?`<span class="hit-yes">✅ 的中</span>`:b.hit===0?`<span class="hit-no">❌ 外れ</span>`:`<span class="hit-pending">未確定</span>`;
-      const btClass={'複勝':'bt-fukusho','ワイド':'bt-wide','3連複':'bt-sanren','単勝':'bt-tan'};
-      const ops=b.hit===null?`<button class="btn-hit" onclick="updateBet(${b.id},1,${b.stake},${b.odds})">的中</button><button class="btn-miss" onclick="updateBet(${b.id},0,0,0)">外れ</button>`:'';
+      const ops=b.hit===null?`<button class="btn-hit" onclick="updateBet(${b.id},1,${b.odds})">的中</button><button class="btn-miss" onclick="updateBet(${b.id},0,0)">外れ</button>`:'';
+      const dateStr=b.date?b.date.replace(/-/g,'/').replace(/(\d{4})\/(\d{2})\/(\d{2})/,'$1年$2月$3日'):'—';
+      const condStr=`${b.surface||''}${b.distance||''}m`;
       return `<tr>
-        <td style="font-size:10px;color:var(--muted)">${b.logged_at||'—'}</td>
-        <td style="font-size:11px">${b.race_name||b.race_id}</td>
-        <td><span class="bet-badge ${btClass[b.bet_type]||'bt-fukusho'}">${b.bet_type}</span></td>
-        <td style="font-weight:700">${b.combination}</td>
-        <td>${b.odds}倍</td>
-        <td style="color:var(--green2)">${b.expected_value?.toFixed(2)||'—'}</td>
-        <td>¥${(b.stake||0).toLocaleString()}</td>
+        <td style="white-space:nowrap">${dateStr}</td>
+        <td style="white-space:nowrap">${b.course||'—'} ${b.race_number||'—'}R</td>
+        <td style="font-size:11px;color:var(--muted)">${condStr}</td>
+        <td style="font-weight:700">${b.race_name||b.race_id}</td>
+        <td><span class="bet-badge bt-fukusho">複勝</span> <strong>${b.combination}番</strong></td>
+        <td>${b.odds||'—'}倍</td>
+        <td style="color:${(b.expected_value||0)>=1.1?'var(--green2)':'var(--muted)'};font-weight:700">${b.expected_value?b.expected_value.toFixed(2):'—'}</td>
         <td>${hitTxt}</td>
-        <td>${b.payout?'¥'+b.payout.toLocaleString():'—'}</td>
         <td>${ops}</td>
       </tr>`;
     }).join('');
-  }catch(e){tbody.innerHTML=`<tr><td colspan="10" class="empty" style="color:var(--red)">エラー: ${e.message}</td></tr>`;}
+  }catch(e){tbody.innerHTML=`<tr><td colspan="9" class="empty" style="color:var(--red)">エラー: ${e.message}</td></tr>`;}
 }
 
-async function updateBet(id,hit,stake,odds){
-  const payout=hit?Math.round(stake*odds):0;
-  await fetch(`/api/log/bets/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({hit,payout})});
+async function updateBet(id,hit,odds){
+  const payout=hit?Math.round(100*odds):0;
+  await fetch('/api/race-bets/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({hit,payout})});
   loadLog();
-  analysisLoaded=false; // force reload stats
+  analysisLoaded=false;
   showToast(hit?'✅ 的中として記録しました':'❌ 外れとして記録しました');
 }
 
@@ -935,12 +656,12 @@ async function updateBet(id,hit,stake,odds){
 function showToast(msg){
   const t=document.getElementById('toast');
   t.textContent=msg;t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),2500);
+  setTimeout(()=>t.classList.remove('show'),3000);
 }
 
 // ===== INIT =====
-loadSettings();
 checkStatus();
+loadRegisteredRaces();
 </script>
 </body>
 </html>

@@ -52,6 +52,38 @@ def _get_log_conn():
             payout INTEGER
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS registered_races (
+            race_id TEXT PRIMARY KEY,
+            registered_at TEXT DEFAULT (datetime('now','localtime')),
+            race_name TEXT,
+            date TEXT,
+            course TEXT,
+            race_number INTEGER,
+            surface TEXT,
+            distance INTEGER,
+            field_count INTEGER
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS race_bets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            registered_at TEXT DEFAULT (datetime('now','localtime')),
+            race_id TEXT NOT NULL,
+            race_name TEXT,
+            date TEXT,
+            course TEXT,
+            race_number INTEGER,
+            surface TEXT,
+            distance INTEGER,
+            bet_type TEXT,
+            combination TEXT,
+            odds REAL,
+            expected_value REAL,
+            hit INTEGER,
+            payout INTEGER
+        )
+    """)
     conn.commit()
     return conn
 
@@ -451,6 +483,195 @@ def api_update_bet(bet_id: int):
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@app.route("/api/register-race", methods=["POST"])
+def api_register_race():
+    """レースを登録し、複勝買い目をrace_betsに保存"""
+    data = request.json or {}
+    race_id = data.get("race_id", "")
+    if not race_id:
+        return jsonify({"status": "error", "message": "race_id missing"}), 400
+    try:
+        conn = _get_log_conn()
+        conn.execute("""
+            INSERT OR REPLACE INTO registered_races
+              (race_id, race_name, date, course, race_number, surface, distance, field_count)
+            VALUES (?,?,?,?,?,?,?,?)
+        """, (
+            race_id,
+            data.get("race_name", ""),
+            data.get("date", ""),
+            data.get("venue", ""),
+            data.get("race_number", 0),
+            data.get("surface", ""),
+            data.get("distance", 0),
+            data.get("field_count", 0),
+        ))
+        # 複勝推奨を race_bets に自動保存
+        recs = [r for r in (data.get("recommendations") or []) if r.get("bet_type") == "複勝"]
+        for r in recs:
+            conn.execute("""
+                INSERT INTO race_bets
+                  (race_id, race_name, date, course, race_number, surface, distance, bet_type, combination, odds, expected_value)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                race_id,
+                data.get("race_name", ""),
+                data.get("date", ""),
+                data.get("venue", ""),
+                data.get("race_number", 0),
+                data.get("surface", ""),
+                data.get("distance", 0),
+                "複勝",
+                r.get("combination", ""),
+                r.get("odds", 0),
+                r.get("expected_value", 0),
+            ))
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "ok", "saved_bets": len(recs)})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/registered-races")
+def api_registered_races():
+    """登録済みレース一覧"""
+    date_q = request.args.get("date", "")
+    try:
+        conn = _get_log_conn()
+        if date_q:
+            rows = conn.execute(
+                "SELECT * FROM registered_races WHERE date=? ORDER BY date DESC, race_number DESC",
+                (date_q,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM registered_races ORDER BY date DESC, race_number DESC LIMIT 200"
+            ).fetchall()
+        conn.close()
+        return jsonify({"status": "ok", "races": [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/race-bets")
+def api_race_bets():
+    """買い目ログ（複勝のみ、買い目があるレースのみ）"""
+    date_q = request.args.get("date", "")
+    try:
+        conn = _get_log_conn()
+        if date_q:
+            rows = conn.execute(
+                "SELECT * FROM race_bets WHERE date=? ORDER BY date DESC, race_number DESC, id DESC",
+                (date_q,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM race_bets ORDER BY date DESC, race_number DESC, id DESC LIMIT 500"
+            ).fetchall()
+        conn.close()
+        return jsonify({"status": "ok", "bets": [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/race-bets/<int:bet_id>", methods=["PATCH"])
+def api_update_race_bet(bet_id: int):
+    data = request.json
+    hit = data.get("hit")
+    payout = data.get("payout", 0)
+    try:
+        conn = _get_log_conn()
+        conn.execute("UPDATE race_bets SET hit=?, payout=? WHERE id=?", (hit, payout, bet_id))
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/refresh-odds/<race_id>", methods=["POST"])
+def api_refresh_odds(race_id: str):
+    """オッズを再取得してDBを更新し予測を返す"""
+    try:
+        from jra_predictor.scraper.race_result import RaceResultScraper
+        from jra_predictor.data import Database
+        import pandas as pd
+
+        db = Database()
+        scraper = RaceResultScraper()
+        win_place_odds = scraper._fetch_win_place_odds(race_id)
+        if not win_place_odds:
+            return jsonify({"status": "error", "message": "オッズ取得失敗"}), 500
+
+        df = db.read_table("race_results")
+        df_race = df[df["race_id"] == race_id].copy()
+        if df_race.empty:
+            return jsonify({"status": "error", "message": "レースデータなし"}), 404
+
+        valid = [(hn, win_place_odds[hn].get("win_odds", 9999)) for hn in win_place_odds if win_place_odds[hn].get("win_odds")]
+        valid.sort(key=lambda x: x[1])
+        pop_rank = {hn: i+1 for i, (hn, _) in enumerate(valid)}
+
+        entries = df_race.to_dict("records")
+        for entry in entries:
+            hn = int(entry.get("horse_number") or 0)
+            if hn in win_place_odds:
+                entry["win_odds"] = win_place_odds[hn].get("win_odds")
+                entry["popularity"] = pop_rank.get(hn, 0)
+
+        from sqlalchemy import text as _text
+        with db.engine.connect() as conn2:
+            conn2.execute(_text("DELETE FROM race_results WHERE race_id = :r"), {"r": race_id})
+            conn2.commit()
+        db.upsert_race_results(pd.DataFrame(entries))
+
+        return jsonify({"status": "ok", "updated": len(win_place_odds)})
+    except Exception as e:
+        logger.exception(f"refresh-odds error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/actual-stats")
+def api_actual_stats():
+    """登録レースの複勝実績統計"""
+    try:
+        conn = _get_log_conn()
+        rows = conn.execute(
+            "SELECT date, hit, payout, odds FROM race_bets WHERE bet_type='複勝' AND hit IS NOT NULL ORDER BY date"
+        ).fetchall()
+        conn.close()
+        total = len(rows)
+        hits = sum(1 for r in rows if r["hit"] == 1)
+        payout = sum(r["payout"] or 0 for r in rows)
+        # 1betあたり100円として計算
+        stake = total * 100
+        hit_rate = round(hits / total * 100, 1) if total else None
+        roi = round(payout / stake * 100, 1) if stake else None
+        # 月別集計
+        from collections import defaultdict
+        monthly = defaultdict(lambda: {"bets": 0, "hits": 0, "payout": 0})
+        for r in rows:
+            m = str(r["date"])[:7] if r["date"] else "不明"
+            monthly[m]["bets"] += 1
+            monthly[m]["hits"] += r["hit"] or 0
+            monthly[m]["payout"] += r["payout"] or 0
+        months_sorted = sorted(monthly.keys())
+        return jsonify({
+            "status": "ok",
+            "total_bets": total,
+            "hits": hits,
+            "hit_rate": hit_rate,
+            "roi": roi,
+            "profit": payout - stake,
+            "monthly_labels": months_sorted[-12:],
+            "monthly_roi": [round(monthly[m]["payout"] / (monthly[m]["bets"] * 100) * 100, 1) if monthly[m]["bets"] else 0 for m in months_sorted[-12:]],
+            "monthly_hit_rate": [round(monthly[m]["hits"] / monthly[m]["bets"] * 100, 1) if monthly[m]["bets"] else 0 for m in months_sorted[-12:]],
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route("/api/predict-url", methods=["POST"])
 def api_predict_url():
     """netkeibaのURLを受け取って予測を返す"""
@@ -723,8 +944,8 @@ def api_predict_url():
             tan_odds = odds.get("tan", {}).get(hn, win_odds_val)
             win_ev = round(wp * tan_odds, 3) if tan_odds else None
             horses_out.append({
-                "number": hn,
-                "frame": int(row.get("frame_number", 0) or 0),
+                "number": _safe_num(row.get("horse_number", 0)),
+                "frame": _safe_num(row.get("frame_number", 1), default=1),
                 "name": str(row.get("horse_name", "")),
                 "sex_age": str(row.get("sex_age", "") or ""),
                 "jockey": str(row.get("jockey_name", "") or ""),
@@ -780,6 +1001,17 @@ def api_predict_url():
     except Exception as e:
         logger.exception(f"predict-url error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+def _safe_num(v, default=0, as_int=True):
+    try:
+        import math
+        f = float(v)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return int(f) if as_int else f
+    except (TypeError, ValueError):
+        return default
 
 
 def _safe_int(s):
