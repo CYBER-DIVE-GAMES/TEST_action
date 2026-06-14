@@ -307,6 +307,43 @@ def cmd_scrape_odds(args):
     )
 
 
+def cmd_debug_scrape(args):
+    """shutuba.htmlの実際のHTML構造を診断する"""
+    import logging
+    logging.getLogger("jra_predictor").setLevel(logging.DEBUG)
+    from jra_predictor.scraper import RaceResultScraper
+    from config.settings import NETKEIBA_RACE
+
+    s = RaceResultScraper()
+    race_id = args.race_id
+    url = f"{NETKEIBA_RACE}/race/shutuba.html"
+    print(f"Fetching: {url}?race_id={race_id}")
+    soup = s.get(url, params={"race_id": race_id})
+    if soup is None:
+        print("ERROR: got None response")
+        return
+
+    print("\n=== ALL TABLES ===")
+    for i, t in enumerate(soup.find_all("table")):
+        print(f"  [{i}] class={t.get('class')} id={t.get('id')}")
+        rows = t.find_all("tr")
+        print(f"       rows={len(rows)}")
+        if rows:
+            first_tds = rows[0].find_all(["td", "th"])
+            print(f"       first row cells={len(first_tds)}: {[c.get_text(strip=True)[:15] for c in first_tds[:5]]}")
+
+    print("\n=== PAGE TITLE ===")
+    print(soup.title.string if soup.title else "(none)")
+
+    print("\n=== HORSE LINKS (first 5) ===")
+    for a in soup.select("a[href*='/horse/']")[:5]:
+        print(f"  {a.get('href')} -> {a.get_text(strip=True)}")
+
+    print("\n=== JOCKEY LINKS (first 3) ===")
+    for a in soup.select("a[href*='/jockey/']")[:3]:
+        print(f"  {a.get('href')} -> {a.get_text(strip=True)}")
+
+
 def cmd_import(args):
     from jra_predictor.data import Database
     from jra_predictor.data.kaggle_importer import KaggleJraImporter
@@ -362,6 +399,10 @@ def main():
     p_pred.add_argument("race_ids", nargs="+", help="レースID（12桁）")
     p_pred.add_argument("--budget", type=float, default=10000, help="予算（円）")
 
+    # debug-scrape
+    p_dbg = sub.add_parser("debug-scrape", help="shutuba.htmlのHTML構造を診断")
+    p_dbg.add_argument("race_id", help="レースID（12桁）")
+
     # predict-today
     p_today = sub.add_parser("predict-today", help="今日の開催レースを自動検出して予測")
     p_today.add_argument("--date", type=str, default="", help="日付 YYYY-MM-DD（省略時:今日）")
@@ -370,7 +411,9 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "list-races":
+    if args.command == "debug-scrape":
+        cmd_debug_scrape(args)
+    elif args.command == "list-races":
         cmd_list_races(args)
     elif args.command == "scrape-odds":
         cmd_scrape_odds(args)

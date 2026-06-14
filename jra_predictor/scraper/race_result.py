@@ -19,14 +19,41 @@ class RaceResultScraper(BaseScaper):
         if soup is None:
             return None
 
-        # テーブルを探す
-        table = soup.select_one("table.Shutuba_Table, table.shutuba_table, table#shutuba_table")
-        if table is None:
-            # fallback: 結果ページも試す
+        # 全テーブルをデバッグログに出力（初回のみ）
+        all_tables = soup.find_all("table")
+        if all_tables:
+            logger.debug(f"Tables found on shutuba page ({race_id}):")
+            for t in all_tables[:5]:
+                logger.debug(f"  class={t.get('class')} id={t.get('id')}")
+        else:
+            logger.warning(f"No tables at all on shutuba page for {race_id}")
+            # 結果ページにフォールバック
             return self.fetch_race_result(race_id)
 
+        # 既知の全パターンを試す
+        table = (
+            soup.select_one("table.Shutuba_Table")
+            or soup.select_one("table.shutuba_table")
+            or soup.select_one("table#shutuba_table")
+            or soup.select_one("table.RaceTable01")
+            or soup.select_one("table.race_table_01")
+            or soup.select_one("table[summary*='出走']")
+            or (all_tables[0] if all_tables else None)
+        )
+        if table is None:
+            logger.warning(f"Entry table not found: {race_id}")
+            return self.fetch_race_result(race_id)
+
+        # 行セレクタも複数パターン試す
+        rows_html = (
+            table.select("tr.HorseList")
+            or table.select("tr[class*='HorseList']")
+            or table.select("tr[class*='Horse']")
+            or [tr for tr in table.select("tr") if tr.select("td") and len(tr.select("td")) >= 6]
+        )
+
         rows = []
-        for tr in table.select("tr.HorseList, tr[class*='HorseList']"):
+        for tr in rows_html:
             tds = tr.select("td")
             if len(tds) < 6:
                 continue
