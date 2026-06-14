@@ -15,112 +15,25 @@ class RaceResultScraper(BaseScaper):
     def fetch_race_entry(self, race_id: str) -> pd.DataFrame | None:
         """出走表から出走馬一覧を取得（未開催レース用）
 
-        netkeibaのshutubaページはJS動的レンダリングのため、
-        内部JSONAPIを直接叩いてデータを取得する。
+        netkeibaはJSレンダリングのためPlaywrightヘッドレスブラウザで取得する。
         """
-        # 1. まず内部JSON APIを試す
-        df = self._fetch_entry_from_api(race_id)
-        if df is not None and not df.empty:
-            return df
+        url = f"{NETKEIBA_RACE}/race/shutuba.html?race_id={race_id}"
 
-        # 2. 結果ページ（開催済みの場合）にフォールバック
-        logger.info(f"API fallback to result page: {race_id}")
-        return self.fetch_race_result(race_id)
-
-    def _fetch_entry_from_api(self, race_id: str) -> pd.DataFrame | None:
-        """netkeibaの内部APIから出走表データを取得"""
-        import time as _time
-        import json
-
-        self._init_session()
-
-        # netkeibaが内部で使うAPI候補を順番に試す
-        api_urls = [
-            (f"{NETKEIBA_RACE}/api/api_get_race_info.html",
-             {"race_id": race_id, "rf": "shutuba_past"}),
-            (f"{NETKEIBA_RACE}/api/api_get_race_list.html",
-             {"race_id": race_id}),
-        ]
-
-        for api_url, params in api_urls:
-            try:
-                self.session.headers.update({"Referer": f"{NETKEIBA_RACE}/race/shutuba.html?race_id={race_id}"})
-                resp = self.session.get(api_url, params=params, timeout=15)
-                if resp.status_code == 200 and resp.text.strip().startswith("{"):
-                    data = json.loads(resp.text)
-                    df = self._parse_shutuba_api(data, race_id)
-                    if df is not None and not df.empty:
-                        logger.info(f"Got entry from API ({api_url}): {len(df)} horses")
-                        return df
-            except Exception as e:
-                logger.debug(f"API attempt failed {api_url}: {e}")
-            _time.sleep(1)
-
-        # 3. shutuba_past.html（静的HTMLバージョン）を試す
-        return self._fetch_entry_shutuba_past(race_id)
-
-    def _parse_shutuba_api(self, data: dict, race_id: str) -> pd.DataFrame | None:
-        """内部APIレスポンスのJSON→DataFrameに変換"""
-        horses = (
-            data.get("data", {}).get("RaceUma", [])
-            or data.get("RaceUma", [])
-            or data.get("horses", [])
-            or []
-        )
-        if not horses:
-            return None
-
-        rows = []
-        for h in horses:
-            rows.append({
-                "race_id": race_id,
-                "frame_number": self._safe_int(str(h.get("Wakuban", h.get("frame_number", "")))),
-                "horse_number": self._safe_int(str(h.get("Umaban", h.get("horse_number", "")))),
-                "horse_name": h.get("HorseName", h.get("horse_name", "")),
-                "horse_id": h.get("HorseID", h.get("horse_id", "")),
-                "sex_age": h.get("Sex", "") + str(h.get("Age", "")),
-                "weight_carried": self._safe_float(str(h.get("Futan", h.get("weight_carried", "")))),
-                "jockey_name": h.get("JockeyName", h.get("jockey_name", "")),
-                "jockey_id": h.get("JockeyID", h.get("jockey_id", "")),
-                "trainer_name": h.get("TrainerName", h.get("trainer_name", "")),
-                "trainer_id": h.get("TrainerID", h.get("trainer_id", "")),
-                "win_odds": None,
-                "popularity": None,
-                "horse_weight": None,
-                "horse_weight_diff": None,
-                "finish_order": None,
-                "finish_time_sec": None,
-                "margin": "",
-                "passing_order": "",
-                "last_3f": None,
-                "is_win": 0,
-                "is_place": 0,
-            })
-        return pd.DataFrame(rows) if rows else None
-
-    def _fetch_entry_shutuba_past(self, race_id: str) -> pd.DataFrame | None:
-        """shutuba_past.html（静的HTML）から出走馬を取得"""
-        url = f"{NETKEIBA_RACE}/race/shutuba_past.html"
-        soup = self.get(url, params={"race_id": race_id})
+        soup = self.get_browser(url, wait_selector="tr.HorseList")
         if soup is None:
-            return None
-
-        # このページは静的HTMLでテーブルに馬データが入っている
-        table = (
-            soup.select_one("table.Shutuba_Table")
-            or soup.select_one("table.RaceTable01")
-            or soup.select_one("table.ShutubaTable")
-        )
-        if table is None:
-            logger.warning(f"shutuba_past table not found: {race_id}")
-            return None
+            logger.info(f"Playwright失敗、結果ページにフォールバック: {race_id}")
+            return self.fetch_race_result(race_id)
 
         rows_html = (
-            table.select("tr.HorseList")
-            or table.select("tr[class*='HorseList']")
-            or [tr for tr in table.select("tr")
+            soup.select("tr.HorseList")
+            or soup.select("tr[class*='HorseList']")
+            or [tr for tr in soup.select("table.Shutuba_Table tr")
                 if len(tr.select("td")) >= 6 and tr.select_one("a[href*='/horse/']")]
         )
+
+        if not rows_html:
+            logger.warning(f"出走馬行が見つからない（Playwright後）: {race_id}")
+            return self.fetch_race_result(race_id)
 
         rows = []
         for tr in rows_html:
@@ -182,10 +95,10 @@ class RaceResultScraper(BaseScaper):
                 continue
 
         if not rows:
-            logger.warning(f"No horse rows in shutuba_past: {race_id}")
+            logger.warning(f"Entry rows empty after Playwright: {race_id}")
             return None
 
-        logger.info(f"Got entry from shutuba_past: {len(rows)} horses for {race_id}")
+        logger.info(f"fetch_race_entry: {len(rows)} horses for {race_id}")
         return pd.DataFrame(rows)
 
     def fetch_race_result(self, race_id: str) -> pd.DataFrame | None:
@@ -284,32 +197,25 @@ class RaceResultScraper(BaseScaper):
             data_intro = soup.select_one("div.data_intro")
             if data_intro:
                 text = data_intro.get_text()
-                # コース情報: 例) 芝1600m
                 m = re.search(r"(芝|ダ|障)(\d+)m", text)
                 if m:
                     info["surface"] = m.group(1)
                     info["distance"] = int(m.group(2))
 
-                # 天候
                 m = re.search(r"天候：(\S+)", text)
                 info["weather"] = m.group(1) if m else ""
 
-                # 馬場状態
                 m = re.search(r"馬場：(\S+)", text)
                 info["track_condition"] = m.group(1) if m else ""
 
-                # 日付
                 m = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", text)
                 if m:
                     info["date"] = f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
 
-                # 開催場所 (race_id = YYYYMMDDCCRR, CC is at index 8-10)
                 course_code = race_id[8:10]
                 from config.settings import COURSE_CODES
                 info["course"] = COURSE_CODES.get(course_code, course_code)
                 info["course_code"] = course_code
-
-                # レース番号
                 info["race_number"] = int(race_id[10:12]) if len(race_id) >= 12 else 0
         except Exception as e:
             logger.warning(f"Race info parse error {race_id}: {e}")
@@ -319,13 +225,9 @@ class RaceResultScraper(BaseScaper):
     def fetch_odds(self, race_id: str) -> dict:
         """単勝・複勝・馬連・ワイド・3連複オッズを取得"""
         odds = {}
-        # 単勝・複勝
         odds["tansho"] = self._fetch_win_place_odds(race_id)
-        # 馬連
         odds["umaren"] = self._fetch_quinella_odds(race_id)
-        # ワイド
         odds["wide"] = self._fetch_wide_odds(race_id)
-        # 3連複
         odds["sanrenpuku"] = self._fetch_trio_odds(race_id)
         return odds
 
