@@ -609,6 +609,17 @@ def api_predict_url():
             # race_idフォーマットが YYYYMMDDCCRR の場合のみ有効
             info["date"] = f"{race_id[:4]}-{race_id[4:6]}-{race_id[6:8]}"
         db.upsert_race_info(info)
+        # race情報をentryにも埋め込む（FeatureBuilderのmergeで上書きされないよう）
+        for entry in entries:
+            entry["race_name"]   = info.get("race_name", "")
+            entry["date"]        = info.get("date", "")
+            entry["course"]      = info.get("course", "")
+            entry["course_code"] = info.get("course_code", "")
+            entry["race_number"] = info.get("race_number", 0)
+            entry["distance"]    = info.get("distance", None)
+            entry["surface"]     = info.get("surface", "")
+            entry["track_condition"] = info.get("track_condition", "")
+        df_entry = pd.DataFrame(entries)
         # 古い重複データを削除してから挿入
         with db.engine.connect() as conn:
             from sqlalchemy import text as _text
@@ -749,16 +760,20 @@ def api_predict_url():
                     "stake": int(r["stake"]),
                 })
 
+        def _val(row, key, fallback=""):
+            v = row.get(key, fallback)
+            return fallback if (v is None or str(v) in ("nan", "None", "NaT")) else v
+
         first = df_race.iloc[0]
         return jsonify({
             "status": "ok",
             "data": {
                 "race_id": race_id,
-                "race_name": str(first.get("race_name", race_id)),
-                "venue": str(first.get("course", "")),
-                "date": str(first.get("date", ""))[:10],
-                "distance": int(first.get("distance", 0) or 0),
-                "surface": str(first.get("surface", "")),
+                "race_name": info.get("race_name") or _val(first, "race_name") or race_id,
+                "venue": info.get("course") or _val(first, "course"),
+                "date": (info.get("date") or _val(first, "date", ""))[:10],
+                "distance": info.get("distance") or int(_val(first, "distance", 0) or 0),
+                "surface": info.get("surface") or _val(first, "surface"),
                 "field_count": len(df_race),
                 "horses": horses_out,
                 "recommendations": recommendations,
