@@ -167,7 +167,17 @@ class RacePredictor:
     def predict_proba(self, df: pd.DataFrame) -> np.ndarray:
         if self.model is None:
             raise RuntimeError("Model not trained. Call train() first.")
-        feature_cols = [c for c in FEATURE_COLS if c in df.columns]
+        # モデルが記録している特徴量名を優先（訓練時と列数を一致させる）
+        trained_cols = self.model.feature_name()
+        if trained_cols:
+            # 訓練時にあった列のみ使用、なければNaNで補完
+            for c in trained_cols:
+                if c not in df.columns:
+                    df = df.copy()
+                    df[c] = float("nan")
+            feature_cols = trained_cols
+        else:
+            feature_cols = [c for c in FEATURE_COLS if c in df.columns]
         X = df[feature_cols].fillna(-999)
         raw = self.model.predict(X)
         if self.calibrator is not None:
