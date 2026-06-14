@@ -247,31 +247,38 @@ class RaceResultScraper(BaseScaper):
 
     def _fetch_win_place_odds(self, race_id: str) -> dict:
         url = f"{NETKEIBA_RACE}/odds/index.html?race_id={race_id}&type=b1"
-        # JS-rendered page; use Playwright
-        soup = self.get_browser(url, wait_selector="tr.HorseList")
+        soup = self.get_browser(url, wait_selector="table.RaceOdds_HorseList_Table")
         if soup is None:
-            # fallback to plain HTTP
             soup = self.get(f"{NETKEIBA_RACE}/odds/index.html", params={"race_id": race_id, "type": "b1"})
         if soup is None:
             return {}
+
+        tables = soup.select("table.RaceOdds_HorseList_Table")
+        # tables[0]=単勝, tables[1]=複勝
         result = {}
-        for tr in soup.select("tr.HorseList"):
-            tds = tr.select("td")
-            if len(tds) < 4:
-                continue
-            try:
-                num = self._safe_int(tds[0].get_text(strip=True))
-                win = self._safe_float(tds[1].get_text(strip=True))
-                place_min = self._safe_float(tds[2].get_text(strip=True))
-                place_max = self._safe_float(tds[3].get_text(strip=True))
-                if num:
-                    result[num] = {
-                        "win_odds": win,
-                        "place_odds_min": place_min,
-                        "place_odds_max": place_max,
-                    }
-            except Exception:
-                pass
+
+        def parse_table(table, idx):
+            for tr in table.select("tr")[1:]:  # skip header
+                tds = tr.select("td")
+                if len(tds) < 6:
+                    continue
+                num = self._safe_int(tds[1].get_text(strip=True))
+                odds_text = tds[5].get_text(strip=True)
+                if num is None:
+                    continue
+                if num not in result:
+                    result[num] = {}
+                if idx == 0:
+                    result[num]["win_odds"] = self._safe_float(odds_text)
+                else:
+                    # "1.7 - 2.6" 形式
+                    parts = odds_text.replace("–", "-").split("-")
+                    result[num]["place_odds_min"] = self._safe_float(parts[0].strip()) if parts else None
+                    result[num]["place_odds_max"] = self._safe_float(parts[-1].strip()) if len(parts) > 1 else result[num]["place_odds_min"]
+
+        for i, t in enumerate(tables[:2]):
+            parse_table(t, i)
+
         logger.info(f"Win/place odds fetched: {len(result)} horses for {race_id}")
         return result
 
