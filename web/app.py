@@ -696,51 +696,10 @@ def api_predict_url():
 
         scraper = RaceResultScraper()
 
-        # 1. 出走表取得: ユーザーURL → shutuba.html → shutuba_past.html → result.html の順で試す
+        # 1. 出走表取得
+        # fetch_race_entry: shutuba.html を試し、失敗したら fetch_race_result (result.html) に自動フォールバック
         logger.info(f"predict-url: fetching entries for {race_id}")
-
-        def _scrape_url(fetch_url):
-            """任意のnetkeiba URLから馬リストをDataFrameで返す"""
-            is_result = re.search(r"/race/\d{12}/?$", fetch_url)
-            wait_sel = "table.race_table_01" if is_result else "tr.HorseList"
-            soup = get_with_browser(fetch_url, wait_selector=wait_sel, timeout_ms=20000)
-            if soup is None:
-                return None
-            # shutuba系
-            rows = (soup.select("tr.HorseList")
-                    or soup.select("tr[class*='HorseList']"))
-            if rows:
-                return scraper.fetch_race_entry(race_id)  # 正規パーサーに委譲
-            # result系
-            table = (soup.select_one("table.race_table_01")
-                     or next((t for t in soup.find_all("table")
-                               if t.select("a[href*='/horse/']")), None))
-            if table:
-                return scraper.fetch_race_result(race_id)  # 正規パーサーに委譲
-            return None
-
-        df_entry = None
-        urls_to_try = [
-            url,  # ユーザーが貼ったURL（最優先）
-            f"{NETKEIBA_RACE}/race/shutuba_past.html?race_id={race_id}",
-            f"{NETKEIBA_RACE}/race/shutuba.html?race_id={race_id}",
-            f"{NETKEIBA_BASE}/race/{race_id}/",
-        ]
-        seen = set()
-        for try_url in urls_to_try:
-            if try_url in seen:
-                continue
-            seen.add(try_url)
-            logger.info(f"predict-url trying: {try_url}")
-            # result.html (db.netkeiba) は直接 fetch_race_result で
-            if re.search(r"/race/\d{12}/?$", try_url):
-                df_entry = scraper.fetch_race_result(race_id)
-            else:
-                df_entry = scraper.fetch_race_entry(race_id)
-            if df_entry is not None and not df_entry.empty:
-                logger.info(f"Got {len(df_entry)} horses from {try_url}")
-                break
-            df_entry = None
+        df_entry = scraper.fetch_race_entry(race_id)
 
         if df_entry is None or df_entry.empty:
             return jsonify({

@@ -13,26 +13,29 @@ logger = logging.getLogger(__name__)
 class RaceResultScraper(BaseScaper):
 
     def fetch_race_entry(self, race_id: str) -> pd.DataFrame | None:
-        """出走表から出走馬一覧を取得（未開催レース用）
+        """出走表から出走馬一覧を取得
 
-        netkeibaはJSレンダリングのためPlaywrightヘッドレスブラウザで取得する。
+        shutuba_past.html → shutuba.html → result.html の順で試す。
+        netkeibaはJSレンダリングのためPlaywrightヘッドレスブラウザを使用する。
         """
-        url = f"{NETKEIBA_RACE}/race/shutuba.html?race_id={race_id}"
-
-        soup = self.get_browser(url, wait_selector="tr.HorseList")
-        if soup is None:
-            logger.info(f"Playwright失敗、結果ページにフォールバック: {race_id}")
-            return self.fetch_race_result(race_id)
-
-        rows_html = (
-            soup.select("tr.HorseList")
-            or soup.select("tr[class*='HorseList']")
-            or [tr for tr in soup.select("table.Shutuba_Table tr")
-                if len(tr.select("td")) >= 6 and tr.select_one("a[href*='/horse/']")]
-        )
+        rows_html = None
+        for page_type in ["shutuba_past.html", "shutuba.html"]:
+            url = f"{NETKEIBA_RACE}/race/{page_type}?race_id={race_id}"
+            soup = self.get_browser(url, wait_selector="tr.HorseList")
+            if soup is None:
+                continue
+            rows_html = (
+                soup.select("tr.HorseList")
+                or soup.select("tr[class*='HorseList']")
+                or [tr for tr in soup.select("table.Shutuba_Table tr")
+                    if len(tr.select("td")) >= 6 and tr.select_one("a[href*='/horse/']")]
+            )
+            if rows_html:
+                logger.info(f"Got {len(rows_html)} rows from {page_type} for {race_id}")
+                break
 
         if not rows_html:
-            logger.warning(f"出走馬行が見つからない（Playwright後）: {race_id}")
+            logger.info(f"出走表なし→結果ページにフォールバック: {race_id}")
             return self.fetch_race_result(race_id)
 
         rows = []
