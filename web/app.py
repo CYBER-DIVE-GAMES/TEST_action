@@ -688,186 +688,48 @@ def api_predict_url():
     race_id = m.group(1)
 
     try:
-        # 1. Playwrightでページを取得して出走馬リストを取得
-        from jra_predictor.scraper.base import get_with_browser
-        from jra_predictor.scraper import HorseProfileScraper
+        from jra_predictor.scraper.race_result import RaceResultScraper
         from jra_predictor.data import Database
         import pandas as pd
 
-        def _try_fetch(fetch_url):
-            # result.htmlは tr.HorseList がないので別セレクタを使う
-            is_result_page = re.search(r"/race/\d{12}/?$", fetch_url)
-            wait_sel = "table.race_table_01" if is_result_page else "tr.HorseList"
-            s = get_with_browser(fetch_url, wait_selector=wait_sel, timeout_ms=25000)
-            if s is None:
-                return None, []
-            rows_html = (
-                s.select("tr.HorseList")
-                or s.select("tr[class*='HorseList']")
-                or [tr for tr in (s.select_one("table.race_table_01") or s).select("tr")
-                    if tr.select_one("a[href*='/horse/']") and len(tr.select("td")) >= 6]
-            )
-            return s, rows_html
+        scraper = RaceResultScraper()
 
-        # shutuba.html → shutuba_past.html → result.html の順に試す
-        from config.settings import NETKEIBA_RACE, NETKEIBA_BASE
-        urls_to_try = [url]
-        if "shutuba.html" in url:
-            urls_to_try.append(f"{NETKEIBA_RACE}/race/shutuba_past.html?race_id={race_id}")
-        elif "shutuba_past.html" in url:
-            urls_to_try.append(f"{NETKEIBA_RACE}/race/shutuba.html?race_id={race_id}")
-        # 終了済みレース: result.htmlにフォールバック
-        urls_to_try.append(f"{NETKEIBA_BASE}/race/{race_id}/")
+        # 1. 出走表取得: fetch_race_entry → fetch_race_result の順で試す
+        logger.info(f"predict-url: fetching entries for {race_id}")
+        df_entry = scraper.fetch_race_entry(race_id)
+        if df_entry is None or df_entry.empty:
+            df_entry = scraper.fetch_race_result(race_id)
 
-        soup, rows_html = None, []
-        for try_url in urls_to_try:
-            logger.info(f"predict-url trying: {try_url}")
-            soup, rows_html = _try_fetch(try_url)
-            if rows_html:
-                logger.info(f"Got {len(rows_html)} rows from {try_url}")
-                break
-
-        # デバッグ情報
-        if soup and not rows_html:
-            all_tables = soup.find_all("table")
-            horse_links = soup.select("a[href*='/horse/']")
-            logger.warning(f"Page loaded but no horse rows. tables={len(all_tables)} horse_links={len(horse_links)}")
-            if horse_links:
-                logger.info(f"First horse link: {horse_links[0].get('href')}")
-
-        def _parse_entry_row(tr):
-            """shutuba_past / result 両ページ対応のエントリ解析"""
-            tds = tr.select("td")
-            horse_link = tr.select_one("a[href*='/horse/']")
-            if not horse_link:
-                return None
-            m2 = re.search(r"/horse/(\w+)", horse_link.get("href", ""))
-            horse_id = m2.group(1) if m2 else ""
-            horse_name = horse_link.get_text(strip=True)
-            jockey_link = tr.select_one("a[href*='/jockey/']")
-            jockey_id, jockey_name = "", ""
-            if jockey_link:
-                m3 = re.search(r"/jockey/(\w+)", jockey_link.get("href", ""))
-                jockey_id = m3.group(1) if m3 else ""
-                jockey_name = jockey_link.get_text(strip=True)
-            texts = [td.get_text(strip=True) for td in tds]
-
-            # result.html: td[0]=着順, td[1]=枠, td[2]=馬番, td[3]=馬名, td[4]=性齢, td[5]=斤量, td[6]=騎手
-            # shutuba.html: td[0]=枠, td[1]=馬番, ..., td[4]=性齢, td[5]=斤量
-            # 判定: td[0]が着順（数字）かどうか
-            is_result = texts[0].isdigit() and len(texts) >= 10
-
-            if is_result:
-                frame_idx, horse_idx, sex_age_idx, wc_idx = 1, 2, 4, 5
-                win_odds_idx = 12 if len(texts) > 12 else None
-                pop_idx = 13 if len(texts) > 13 else None
-                finish_order = _safe_int(texts[0])
-                raw_wt = texts[14] if len(texts) > 14 else ""
-                wt_m = re.search(r"(\d{3,4})", raw_wt)
-                horse_weight = float(wt_m.group(1)) if wt_m else None
-                wt_diff_m = re.search(r"\(([+-]?\d+)\)", raw_wt)
-                horse_weight_diff = float(wt_diff_m.group(1)) if wt_diff_m else None
-            else:
-                frame_idx, horse_idx, sex_age_idx, wc_idx = 0, 1, 4, 5
-                win_odds_idx = None
-                pop_idx = None
-                finish_order = None
-                horse_weight = None
-                horse_weight_diff = None
-
-            raw_sex_age = texts[sex_age_idx] if len(texts) > sex_age_idx else ""
-            sex_age_m = re.search(r"([牡牝騸セ]\d+)", raw_sex_age)
-            sex_age = sex_age_m.group(1) if sex_age_m else raw_sex_age[:3]
-            raw_wc = texts[wc_idx] if len(texts) > wc_idx else ""
-            wc_m = re.search(r"(\d+\.?\d*)", raw_wc)
-            weight_carried = float(wc_m.group(1)) if wc_m else None
-
-            win_odds = None
-            if win_odds_idx and len(texts) > win_odds_idx:
-                try:
-                    win_odds = float(texts[win_odds_idx])
-                except (ValueError, TypeError):
-                    pass
-            popularity = _safe_int(texts[pop_idx]) if pop_idx and len(texts) > pop_idx else None
-
-            return {
-                "race_id": race_id,
-                "frame_number": _safe_int(texts[frame_idx]) if len(texts) > frame_idx else None,
-                "horse_number": _safe_int(texts[horse_idx]) if len(texts) > horse_idx else None,
-                "horse_name": horse_name,
-                "horse_id": horse_id,
-                "sex_age": sex_age,
-                "weight_carried": weight_carried,
-                "jockey_name": jockey_name,
-                "jockey_id": jockey_id,
-                "finish_order": finish_order,
-                "finish_time_sec": None, "margin": "", "passing_order": "", "last_3f": None,
-                "horse_weight": horse_weight, "horse_weight_diff": horse_weight_diff,
-                "win_odds": win_odds, "popularity": popularity,
-                "is_win": 1 if finish_order == 1 else 0,
-                "is_place": 1 if finish_order and finish_order <= 3 else 0,
-            }
-
-        entries = []
-        if rows_html:
-            # OikiriDataHead（過去走行）の行を除外、本馬のみ
-            main_rows = [tr for tr in rows_html
-                         if not any('OikiriData' in c for c in (tr.get('class') or []))]
-            for tr in main_rows:
-                entry = _parse_entry_row(tr)
-                if entry:
-                    entries.append(entry)
-
-        if not entries:
-            debug_info = ""
-            if soup:
-                tables = soup.find_all("table")
-                horse_links = soup.select("a[href*='/horse/']")
-                title = soup.title.string if soup.title else "なし"
-                debug_info = f" [ページタイトル:{title}, テーブル数:{len(tables)}, 馬リンク:{len(horse_links)}]"
+        if df_entry is None or df_entry.empty:
             return jsonify({
                 "status": "error",
-                "message": f"出走馬が取得できませんでした (race_id={race_id}){debug_info}。"
-                           "出走表がまだ公開されていないか、レースが終了している可能性があります。"
+                "message": f"出走馬が取得できませんでした (race_id={race_id})。"
+                           "出走表がまだ公開されていないか、URLが正しくない可能性があります。"
                            "通常はレース3〜4日前から出走表が公開されます。"
             }), 404
 
-        # 2. DBに保存
-        db = Database()
-        df_entry = pd.DataFrame(entries)
+        entries = df_entry.to_dict("records")
+        logger.info(f"predict-url: got {len(entries)} horses")
 
-        # race_info: 取得済みsoupのタイトルから抽出
-        info = {"race_id": race_id}
-        if soup and soup.title:
-            title_text = soup.title.string or ""
-            # 例: "宝塚記念(G1) 5走表示 | 2026年6月14日 阪神11R"
-            import re as _re
-            m_date = _re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", title_text)
-            if m_date:
-                info["date"] = f"{m_date.group(1)}-{int(m_date.group(2)):02d}-{int(m_date.group(3)):02d}"
-            m_name = _re.match(r"([^\|]+)", title_text)
-            if m_name:
-                info["race_name"] = m_name.group(1).split("5走")[0].strip()
-            m_venue = _re.search(r"\d{4}年\d+月\d+日\s+(\S+?)\d+R", title_text)
-            if m_venue:
-                info["course"] = m_venue.group(1)
-            m_rnum = _re.search(r"(\d+)R", title_text)
-            if m_rnum:
-                info["race_number"] = int(m_rnum.group(1))
-        # URLにrace_idがある場合はそこからも補完
+        # 2. race_info取得
+        db = Database()
+        info = scraper.fetch_race_info(race_id) or {"race_id": race_id}
+
+        # race_idから基本情報を補完
         course_code = race_id[8:10]
         from config.settings import COURSE_CODES
-        if "course" not in info:
+        if "course" not in info or not info.get("course"):
             info["course"] = COURSE_CODES.get(course_code, course_code)
         info["course_code"] = course_code
-        if "race_number" not in info:
+        if "race_number" not in info or not info.get("race_number"):
             info["race_number"] = int(race_id[10:12])
-        if "date" not in info:
-            # race_idフォーマットが YYYYMMDDCCRR の場合のみ有効
+        if "date" not in info or not info.get("date"):
             info["date"] = f"{race_id[:4]}-{race_id[4:6]}-{race_id[6:8]}"
         db.upsert_race_info(info)
-        # race情報をentryにも埋め込む（FeatureBuilderのmergeで上書きされないよう）
+
+        # race情報をentryにも埋め込む
         for entry in entries:
+            entry["race_id"]     = race_id
             entry["race_name"]   = info.get("race_name", "")
             entry["date"]        = info.get("date", "")
             entry["course"]      = info.get("course", "")
