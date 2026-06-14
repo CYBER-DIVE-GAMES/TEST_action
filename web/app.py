@@ -675,17 +675,277 @@ def api_actual_stats():
 @app.route("/api/predict-url", methods=["POST"])
 def api_predict_url():
     """netkeibaのURLを受け取って予測を返す"""
+    import re, math
+    import pandas as pd
     data = request.json or {}
     url = data.get("url", "").strip()
     if not url:
         return jsonify({"status": "error", "message": "URLを入力してください"}), 400
 
-    # race_idをURLから抽出
-    import re
-    m = re.search(r"race_id=(\d{12})", url)
+    m = re.search(r"race_id=(\d+)", url)
     if not m:
-        return jsonify({"status": "error", "message": "URLからrace_id（12桁）が取得できません"}), 400
+        return jsonify({"status": "error", "message": "URLにrace_idが見つかりません"}), 400
     race_id = m.group(1)
+
+    try:
+        from jra_predictor.scraper.base import get_with_browser
+        from jra_predictor.models import RacePredictor, ExpectedValueCalculator
+        from jra_predictor.scraper.race_result import RaceResultScraper
+        from config.settings import COURSE_CODES
+
+        # ── Step 1: ユーザーのURLをそのままPlaywrightで開く ──────────────────
+        logger.info(f"predict-url: loading {url}")
+        soup = get_with_browser(url, wait_selector="tr.HorseList", timeout_ms=30000)
+        if soup is None:
+            return jsonify({"status": "error", "message": "ページを開けませんでした。ネット接続を確認してください。"}), 500
+
+        # ── Step 2: 馬リストをパース ──────────────────────────────────────────
+        rows = [tr for tr in soup.select("tr.HorseList")
+                if not any("OikiriData" in c for c in (tr.get("class") or []))]
+
+        if not rows:
+            return jsonify({
+                "status": "error",
+                "message": "出走馬が取得できませんでした。出走表がまだ公開されていないか、レースが終了している可能性があります。"
+            }), 404
+
+        entries = []
+        for tr in rows:
+            tds = tr.select("td")
+            texts = [td.get_text(" ", strip=True) for td in tds]
+            if len(texts) < 6:
+                continue
+            horse_link = tr.select_one("a[href*='/horse/']")
+            jockey_link = tr.select_one("a[href*='/jockey/']")
+
+            horse_id = ""
+            horse_name = horse_link.get_text(strip=True) if horse_link else texts[3] if len(texts) > 3 else ""
+            if horse_link:
+                hm = re.search(r"/horse/(\w+)", horse_link["href"])
+                horse_id = hm.group(1) if hm else ""
+
+            jockey_name = jockey_link.get_text(strip=True) if jockey_link else ""
+            jockey_id = ""
+            if jockey_link:
+                jm = re.search(r"/jockey/(\w+)", jockey_link["href"])
+                jockey_id = jm.group(1) if jm else ""
+
+            # 性齢: "牡5" パターンを抽出
+            raw_sex_age = texts[4] if len(texts) > 4 else ""
+            sa_m = re.search(r"([牡牝騸セ]\d+)", raw_sex_age)
+            sex_age = sa_m.group(1) if sa_m else raw_sex_age[:3]
+
+            # 斤量
+            raw_wc = texts[5] if len(texts) > 5 else ""
+            wc_m = re.search(r"(\d+\.?\d*)", raw_wc)
+            weight_carried = float(wc_m.group(1)) if wc_m else 55.0
+
+            entries.append({
+                "race_id": race_id,
+                "frame_number": int(texts[0]) if texts[0].isdigit() else None,
+                "horse_number": int(texts[1]) if len(texts) > 1 and texts[1].isdigit() else None,
+                "horse_name": horse_name,
+                "horse_id": horse_id,
+                "sex_age": sex_age,
+                "weight_carried": weight_carried,
+                "jockey_name": jockey_name,
+                "jockey_id": jockey_id,
+                "finish_order": None, "horse_weight": None,
+                "win_odds": None, "popularity": None,
+                "is_win": 0, "is_place": 0,
+            })
+
+        logger.info(f"predict-url: parsed {len(entries)} horses")
+
+        # ── Step 3: レース情報をページタイトルから取得 ──────────────────────
+        course_code = race_id[8:10] if len(race_id) >= 10 else ""
+        race_number = int(race_id[10:12]) if len(race_id) >= 12 else 0
+        info = {
+            "race_id": race_id,
+            "course": COURSE_CODES.get(course_code, course_code),
+            "course_code": course_code,
+            "race_number": race_number,
+            "race_name": "",
+            "date": "",
+            "distance": 0,
+            "surface": "",
+        }
+        title_tag = soup.select_one("title")
+        title_text = title_tag.get_text() if title_tag else ""
+        # タイトル例: "津軽海峡特別(2勝クラス) 5走表示 | 2026年6月14日 函館11R"
+        date_m = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", title_text)
+        if date_m:
+            info["date"] = f"{date_m.group(1)}-{int(date_m.group(2)):02d}-{int(date_m.group(3)):02d}"
+
+        name_m = re.match(r"(.+?)(?:\s*5走|\s*\|)", title_text)
+        if name_m:
+            info["race_name"] = name_m.group(1).strip()
+
+        # 距離・芝ダート
+        race_data_div = soup.select_one(".RaceData01") or soup.select_one(".race_data")
+        if race_data_div:
+            rd_text = race_data_div.get_text()
+            dist_m = re.search(r"(芝|ダ|障)(\d+)m", rd_text)
+            if dist_m:
+                info["surface"] = dist_m.group(1)
+                info["distance"] = int(dist_m.group(2))
+
+        for entry in entries:
+            entry["race_name"]   = info["race_name"]
+            entry["date"]        = info["date"]
+            entry["course"]      = info["course"]
+            entry["course_code"] = info["course_code"]
+            entry["distance"]    = info["distance"] or None
+            entry["surface"]     = info["surface"]
+
+        # ── Step 4: オッズ取得 ────────────────────────────────────────────────
+        scraper = RaceResultScraper()
+        win_place_odds = scraper._fetch_win_place_odds(race_id)
+        if win_place_odds:
+            for entry in entries:
+                hn = entry.get("horse_number")
+                if hn and hn in win_place_odds:
+                    entry["win_odds"] = win_place_odds[hn].get("win_odds")
+            # 人気順を単勝オッズ順で設定
+            valid = sorted(
+                [(e["horse_number"], e.get("win_odds") or 9999) for e in entries if e.get("horse_number")],
+                key=lambda x: x[1]
+            )
+            pop_rank = {hn: i+1 for i, (hn, _) in enumerate(valid)}
+            for entry in entries:
+                if entry.get("horse_number"):
+                    entry["popularity"] = pop_rank.get(entry["horse_number"], 0)
+        else:
+            logger.warning(f"オッズ取得失敗: {race_id}")
+
+        # ── Step 5: インライン特徴量計算 ──────────────────────────────────────
+        df = pd.DataFrame(entries)
+        df["horse_number"] = pd.to_numeric(df["horse_number"], errors="coerce").fillna(0)
+        df["frame_number"] = pd.to_numeric(df["frame_number"], errors="coerce").fillna(1)
+        df["win_odds"]     = pd.to_numeric(df["win_odds"], errors="coerce").fillna(0)
+        df["popularity"]   = pd.to_numeric(df["popularity"], errors="coerce").fillna(0)
+        df["weight_carried"] = pd.to_numeric(df["weight_carried"], errors="coerce").fillna(55)
+        df["horse_weight"] = pd.to_numeric(df.get("horse_weight"), errors="coerce").fillna(0)
+        df["distance"]     = pd.to_numeric(df["distance"], errors="coerce").fillna(info.get("distance") or 1600)
+
+        n = len(df)
+        df["sex"]               = df["sex_age"].str.extract(r"([牡牝騸セ])")
+        df["age"]               = pd.to_numeric(df["sex_age"].str.extract(r"(\d+)")[0], errors="coerce")
+        df["field_count"]       = n
+        df["horse_number_ratio"]= df["horse_number"] / n
+        df["frame_number_norm"] = df["frame_number"] / 8.0
+        df["weight_handicap"]   = df["weight_carried"] - df["weight_carried"].mean()
+        df["is_win"]  = 0
+        df["is_place"] = 0
+
+        pop_min, pop_max = df["popularity"].min(), df["popularity"].max()
+        df["popularity_norm"] = (df["popularity"] - pop_min) / (pop_max - pop_min + 1e-9)
+
+        fav = df[df["popularity"] == 1]
+        fav_o = float(fav["win_odds"].values[0]) if len(fav) else float(df["win_odds"].max() or 1)
+        df["fav_odds"]      = fav_o
+        df["relative_odds"] = df["win_odds"] / (fav_o + 1e-9)
+
+        df["distance_cat"] = pd.cut(df["distance"], bins=[0, 1400, 1800, 2200, 9999],
+                                     labels=["sprint", "mile", "middle", "long"])
+
+        # 過去統計は全NaN（モデルはNaNを -999 で処理）
+        HIST_COLS = ["win_rate_3","win_rate_5","win_rate_10",
+                     "place_rate_3","place_rate_5","place_rate_10",
+                     "avg_popularity_3","avg_popularity_5","avg_odds_5","odds_change",
+                     "prev_finish","prev2_finish","avg_last3f_5","days_since_last","career_runs",
+                     "jockey_win_rate_30","jockey_win_rate_100",
+                     "jockey_place_rate_30","jockey_place_rate_100",
+                     "jockey_course_wins","jockey_dist_wins",
+                     "trainer_win_rate_50","trainer_place_rate_50",
+                     "horse_course_wins","horse_course_place",
+                     "horse_dist_wins","horse_surface_wins","horse_condition_wins",
+                     "avg_running_style","sire_win_rate","sire_place_rate","sire_dist_win_rate",
+                     "avg_weight_3","weight_vs_avg"]
+        for col in HIST_COLS:
+            if col not in df.columns:
+                df[col] = float("nan")
+
+        # object → numeric 変換
+        NON_NUMERIC = {"race_id","horse_name","horse_id","jockey_name","jockey_id",
+                       "trainer_name","race_name","course","course_code","surface",
+                       "track_condition","sex_age","sex","margin","passing_order",
+                       "distance_cat","date"}
+        for col in df.columns:
+            if df[col].dtype == object and col not in NON_NUMERIC:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        # ── Step 6: モデル予測 ────────────────────────────────────────────────
+        win_model   = _cache.get("win_model")   or RacePredictor("is_win")
+        place_model = _cache.get("place_model") or RacePredictor("is_place")
+        if not _cache.get("win_model"):   win_model.load()
+        if not _cache.get("place_model"): place_model.load()
+
+        df_sorted = df.sort_values("horse_number").reset_index(drop=True)
+        win_probs   = win_model.predict_proba(df_sorted)
+        place_probs = place_model.predict_proba(df_sorted)
+
+        ev_calc = ExpectedValueCalculator(win_model, place_model)
+        odds_dict = {
+            "tan":       {hn: v["win_odds"]       for hn, v in (win_place_odds or {}).items() if v.get("win_odds")},
+            "fukusho":   {hn: v.get("place_odds_min", 0) for hn, v in (win_place_odds or {}).items() if v.get("place_odds_min")},
+            "wide": {}, "umaren": {}, "sanrenpuku": {},
+        }
+        recs_df = ev_calc.recommend(df_sorted, odds_dict, budget=10000)
+
+        horses_out = []
+        for i, row in df_sorted.iterrows():
+            hn = int(row["horse_number"] or 0)
+            wp = float(win_probs[i])
+            pp = float(place_probs[i])
+            fukusho_odds = odds_dict["fukusho"].get(hn, 0)
+            tan_odds     = odds_dict["tan"].get(hn, 0)
+            wo = float(row["win_odds"] or 0)
+            horses_out.append({
+                "number":     hn,
+                "frame":      int(row.get("frame_number") or 1),
+                "name":       str(row.get("horse_name") or ""),
+                "sex_age":    str(row.get("sex_age") or ""),
+                "jockey":     str(row.get("jockey_name") or ""),
+                "win_odds":   wo,
+                "popularity": int(row.get("popularity") or 0),
+                "place_odds": round(fukusho_odds, 1) if fukusho_odds else 0,
+                "weight": 0, "weight_diff": 0,
+                "win_prob":   round(wp, 3),
+                "place_prob": round(pp, 3),
+                "place_ev":   round(pp * fukusho_odds, 3) if fukusho_odds else None,
+                "win_ev":     round(wp * tan_odds, 3) if tan_odds else None,
+                "score":      int(min(99, max(1, pp * 200))),
+                "finish_order": None,
+            })
+
+        allowed = {"複勝", "ワイド", "3連複"}
+        recommendations = [
+            {"bet_type": str(r["bet_type"]), "combination": str(r["combination"]),
+             "odds": float(r["odds"]), "probability": float(r["probability"]),
+             "expected_value": float(r["expected_value"]), "stake": int(r["stake"])}
+            for _, r in recs_df.iterrows() if str(r["bet_type"]) in allowed
+        ] if not recs_df.empty else []
+
+        return jsonify({
+            "status": "ok",
+            "data": {
+                "race_id":   race_id,
+                "race_name": info["race_name"] or race_id,
+                "venue":     info["course"],
+                "date":      info["date"],
+                "distance":  info["distance"],
+                "surface":   info["surface"],
+                "field_count": n,
+                "horses":    horses_out,
+                "recommendations":     recommendations,
+                "has_recommendations": len(recommendations) > 0,
+            }
+        })
+
+    except Exception as e:
+        logger.exception(f"predict-url error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
     try:
         from jra_predictor.scraper.race_result import RaceResultScraper
