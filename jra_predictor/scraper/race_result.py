@@ -210,8 +210,8 @@ class RaceResultScraper(BaseScaper):
                 if m:
                     info["date"] = f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
 
-                # 開催場所
-                course_code = race_id[4:6]
+                # 開催場所 (race_id = YYYYMMDDCCRR, CC is at index 8-10)
+                course_code = race_id[8:10]
                 from config.settings import COURSE_CODES
                 info["course"] = COURSE_CODES.get(course_code, course_code)
                 info["course_code"] = course_code

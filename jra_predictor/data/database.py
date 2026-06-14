@@ -155,10 +155,6 @@ class Database:
         logger.info("Database initialized")
 
     def upsert_race_info(self, info: dict):
-        df = pd.DataFrame([info])
-        df.to_sql("race_info", self.engine, if_exists="append", index=False,
-                  method="replace_on_conflict" if False else None)
-        # SQLite upsert
         cols = list(info.keys())
         placeholders = ", ".join(f":{c}" for c in cols)
         col_str = ", ".join(cols)
