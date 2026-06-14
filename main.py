@@ -186,6 +186,115 @@ def cmd_list_races(args):
     print(f"  python main.py predict {date_str}0501 {date_str}0502 ... {date_str}0512")
 
 
+def cmd_predict_today(args):
+    """今日の開催レースを自動検出→データ取得→予測まで一括実行"""
+    from datetime import date, timedelta
+    from jra_predictor.data import Database, DataPipeline
+    from jra_predictor.features import FeatureBuilder
+    from jra_predictor.models import RacePredictor, ExpectedValueCalculator
+    from jra_predictor.backtest.engine import BacktestEngine
+    from jra_predictor.scraper.race_list import RaceListScraper
+    import pandas as pd
+
+    if args.date:
+        d = date.fromisoformat(args.date)
+    else:
+        d = date.today()
+    date_str = d.strftime("%Y%m%d")
+
+    course_codes = args.courses or ["01","02","03","04","05","06","07","08","09","10"]
+    course_names = {
+        "01":"札幌","02":"函館","03":"福島","04":"新潟",
+        "05":"東京","06":"中山","07":"中京","08":"京都",
+        "09":"阪神","10":"小倉"
+    }
+
+    print(f"\n{d.strftime('%Y年%m月%d日')} の開催レースを検索中...")
+
+    # 当日のレースIDを検出
+    scraper = RaceListScraper()
+    race_ids = scraper._fetch_date_race_ids(date_str, course_codes)
+
+    if not race_ids:
+        print("本日の開催レースが見つかりませんでした。")
+        print(f"  --date YYYY-MM-DD で日付を指定するか、")
+        print(f"  --courses 06 09 で競馬場コードを指定してください。")
+        return
+
+    print(f"  {len(race_ids)}レース検出: {race_ids[0]} 〜 {race_ids[-1]}")
+
+    # データ収集（出走表・馬過去成績・オッズ）
+    print("\n出走馬データを収集中（数分かかります）...")
+    db = Database()
+    pipeline = DataPipeline()
+    pipeline.collect_upcoming(race_ids)
+
+    # 特徴量構築
+    print("\n特徴量を計算中...")
+    builder = FeatureBuilder(db)
+    df_all = builder.build()
+
+    # モデルロード
+    win_model = RacePredictor("is_win")
+    place_model = RacePredictor("is_place")
+    win_model.load()
+    place_model.load()
+
+    ev_calc = ExpectedValueCalculator(win_model, place_model)
+    bt = BacktestEngine(db)
+
+    # 各レースを予測
+    print("\n" + "="*70)
+    print(f"【{d.strftime('%Y年%m月%d日')} 予測結果】")
+    print("="*70)
+
+    all_recs = []
+    for race_id in race_ids:
+        df_race = df_all[df_all["race_id"] == race_id]
+        if df_race.empty:
+            continue
+
+        first = df_race.iloc[0]
+        course = first.get("course", "")
+        race_name = first.get("race_name", race_id)
+        race_num = first.get("race_number", "")
+
+        odds = bt._get_odds_for_race(race_id)
+        if not any(odds.values()):
+            odds = bt._build_odds_from_df(df_race)
+
+        recs = ev_calc.recommend(df_race, odds, budget=args.budget)
+
+        print(f"\n【{course} {race_num}R {race_name}】 {len(df_race)}頭")
+
+        if recs.empty:
+            print("  → 買い目なし（期待値閾値を超える馬券なし）")
+        else:
+            # 複勝・ワイド・3連複のみ表示
+            allowed = {"複勝", "ワイド", "3連複"}
+            recs_show = recs[recs["bet_type"].isin(allowed)]
+            if recs_show.empty:
+                print("  → 買い目なし")
+            else:
+                for _, r in recs_show.iterrows():
+                    print(f"  {r['bet_type']:4s}  {r['combination']:12s}  "
+                          f"オッズ:{r['odds']:5.1f}  EV:{r['expected_value']:.3f}  "
+                          f"購入:¥{int(r['stake']):,}")
+                recs["race_id"] = race_id
+                all_recs.append(recs_show)
+
+    if all_recs:
+        df_out = pd.concat(all_recs, ignore_index=True)
+        out_path = f"data/predict_{date_str}.csv"
+        df_out.to_csv(out_path, index=False, encoding="utf-8-sig")
+        print(f"\n買い目をCSVに保存: {out_path}")
+        print(f"合計購入額: ¥{df_out['stake'].sum():,}")
+    else:
+        print("\n本日の全レースで買い目なし")
+
+    print("="*70)
+
+
 def cmd_scrape_odds(args):
     from jra_predictor.data import Database
     from jra_predictor.scraper import OddsCollector
@@ -253,6 +362,12 @@ def main():
     p_pred.add_argument("race_ids", nargs="+", help="レースID（12桁）")
     p_pred.add_argument("--budget", type=float, default=10000, help="予算（円）")
 
+    # predict-today
+    p_today = sub.add_parser("predict-today", help="今日の開催レースを自動検出して予測")
+    p_today.add_argument("--date", type=str, default="", help="日付 YYYY-MM-DD（省略時:今日）")
+    p_today.add_argument("--courses", nargs="*", help="競馬場コード（省略時:全場）")
+    p_today.add_argument("--budget", type=float, default=10000, help="予算（円）")
+
     args = parser.parse_args()
 
     if args.command == "list-races":
@@ -269,6 +384,8 @@ def main():
         cmd_backtest(args)
     elif args.command == "predict":
         cmd_predict(args)
+    elif args.command == "predict-today":
+        cmd_predict_today(args)
     else:
         parser.print_help()
 

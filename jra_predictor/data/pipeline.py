@@ -65,12 +65,32 @@ class DataPipeline:
         logger.info("Historical collection complete")
 
     def collect_upcoming(self, race_ids: list[str]):
-        """直近レース（予測用）のオッズ・出走表のみ収集"""
+        """直近レース（予測用）の出走表・馬過去成績・オッズを収集"""
+        horse_ids_seen = set()
         for race_id in tqdm(race_ids, desc="Upcoming races"):
+            # レース基本情報・出走表
             info = self.result_scraper.fetch_race_info(race_id)
             if info:
                 self.db.upsert_race_info(info)
+
+            # 出走馬の過去成績を取得（特徴量計算に必要）
+            df_entry = self.result_scraper.fetch_race_result(race_id)
+            if df_entry is not None and not df_entry.empty:
+                self.db.upsert_race_results(df_entry)
+                for horse_id in df_entry["horse_id"].dropna().unique():
+                    if horse_id and horse_id not in horse_ids_seen:
+                        horse_ids_seen.add(horse_id)
+                        profile = self.horse_scraper.fetch_horse_profile(horse_id)
+                        if profile:
+                            self.db.upsert_horse_profile(profile)
+                        history = self.horse_scraper.fetch_horse_history(horse_id)
+                        if history is not None:
+                            self.db.upsert_horse_history(history)
+
+            # オッズ
             odds = self.result_scraper.fetch_odds(race_id)
             for bet_type, odds_dict in odds.items():
                 if odds_dict:
                     self.db.save_odds(race_id, bet_type, odds_dict)
+
+        logger.info(f"Upcoming collection complete: {len(race_ids)} races")
