@@ -246,8 +246,12 @@ class RaceResultScraper(BaseScaper):
         return odds
 
     def _fetch_win_place_odds(self, race_id: str) -> dict:
-        url = f"{NETKEIBA_RACE}/odds/index.html"
-        soup = self.get(url, params={"race_id": race_id, "type": "b1"})
+        url = f"{NETKEIBA_RACE}/odds/index.html?race_id={race_id}&type=b1"
+        # JS-rendered page; use Playwright
+        soup = self.get_browser(url, wait_selector="tr.HorseList")
+        if soup is None:
+            # fallback to plain HTTP
+            soup = self.get(f"{NETKEIBA_RACE}/odds/index.html", params={"race_id": race_id, "type": "b1"})
         if soup is None:
             return {}
         result = {}
@@ -260,13 +264,15 @@ class RaceResultScraper(BaseScaper):
                 win = self._safe_float(tds[1].get_text(strip=True))
                 place_min = self._safe_float(tds[2].get_text(strip=True))
                 place_max = self._safe_float(tds[3].get_text(strip=True))
-                result[num] = {
-                    "win_odds": win,
-                    "place_odds_min": place_min,
-                    "place_odds_max": place_max,
-                }
+                if num:
+                    result[num] = {
+                        "win_odds": win,
+                        "place_odds_min": place_min,
+                        "place_odds_max": place_max,
+                    }
             except Exception:
                 pass
+        logger.info(f"Win/place odds fetched: {len(result)} horses for {race_id}")
         return result
 
     def _fetch_quinella_odds(self, race_id: str) -> dict:

@@ -536,14 +536,22 @@ def api_predict_url():
                     jockey_id = m3.group(1) if m3 else ""
                     jockey_name = jockey_link.get_text(strip=True)
                 texts = [td.get_text(strip=True) for td in tds]
+                # sex_age: extract only "牡5" style (sex char + digits), stripping jockey/trainer names
+                raw_sex_age = texts[4] if len(texts) > 4 else ""
+                sex_age_m = re.search(r"([牡牝騸セ]\d+)", raw_sex_age)
+                sex_age = sex_age_m.group(1) if sex_age_m else raw_sex_age[:3]
+                # weight_carried: extract number from td text
+                raw_wc = texts[5] if len(texts) > 5 else ""
+                wc_m = re.search(r"(\d+\.?\d*)", raw_wc)
+                weight_carried = float(wc_m.group(1)) if wc_m else None
                 entries.append({
                     "race_id": race_id,
                     "frame_number": _safe_int(texts[0]) if texts else None,
                     "horse_number": _safe_int(texts[1]) if len(texts) > 1 else None,
                     "horse_name": horse_name,
                     "horse_id": horse_id,
-                    "sex_age": texts[4] if len(texts) > 4 else "",
-                    "weight_carried": _safe_float(texts[5]) if len(texts) > 5 else None,
+                    "sex_age": sex_age,
+                    "weight_carried": weight_carried,
                     "jockey_name": jockey_name,
                     "jockey_id": jockey_id,
                     "finish_order": None, "finish_time_sec": None,
@@ -608,6 +616,35 @@ def api_predict_url():
             conn.commit()
         db.upsert_race_results(df_entry)
 
+        # 2b. オッズ取得（単勝・複勝）してDBのentryを更新
+        from jra_predictor.scraper.race_result import RaceResultScraper
+        odds_scraper = RaceResultScraper()
+        win_place_odds = odds_scraper._fetch_win_place_odds(race_id)
+        if win_place_odds:
+            logger.info(f"Fetched odds for {len(win_place_odds)} horses")
+            for entry in entries:
+                hn = entry.get("horse_number")
+                if hn and hn in win_place_odds:
+                    entry["win_odds"] = win_place_odds[hn].get("win_odds")
+                    entry["popularity"] = None  # popularity determined by rank of win_odds
+            # Set popularity by rank of win_odds
+            valid = [(e["horse_number"], e.get("win_odds") or 9999) for e in entries if e.get("horse_number")]
+            valid.sort(key=lambda x: x[1])
+            pop_rank = {hn: i+1 for i, (hn, _) in enumerate(valid)}
+            for entry in entries:
+                hn = entry.get("horse_number")
+                if hn:
+                    entry["popularity"] = pop_rank.get(hn, 0)
+            # Re-save with odds
+            df_entry = pd.DataFrame(entries)
+            with db.engine.connect() as conn:
+                from sqlalchemy import text as _text
+                conn.execute(_text("DELETE FROM race_results WHERE race_id = :r"), {"r": race_id})
+                conn.commit()
+            db.upsert_race_results(df_entry)
+        else:
+            logger.warning(f"Could not fetch odds for {race_id}")
+
         # 3. 各馬の過去成績を取得（DBになければnetkeibaから）
         horse_scraper = HorseProfileScraper()
         for horse_id in df_entry["horse_id"].dropna().unique():
@@ -640,33 +677,60 @@ def api_predict_url():
         place_model.load()
 
         ev_calc = ExpectedValueCalculator(win_model, place_model)
-        bt = BacktestEngine(db)
-        odds = bt._get_odds_for_race(race_id)
-        if not any(odds.values()):
-            odds = bt._build_odds_from_df(df_race)
+
+        # オッズ辞書を構築（スクレイピング済みの win_place_odds を優先）
+        if win_place_odds:
+            odds = {
+                "tan": {hn: v["win_odds"] for hn, v in win_place_odds.items() if v.get("win_odds")},
+                "fukusho": {hn: v.get("place_odds_min", 1.0) for hn, v in win_place_odds.items() if v.get("place_odds_min")},
+                "wide": {},
+                "umaren": {},
+                "sanrenpuku": {},
+            }
+        else:
+            bt = BacktestEngine(db)
+            odds = bt._get_odds_for_race(race_id)
+            if not any(odds.values()):
+                odds = bt._build_odds_from_df(df_race)
 
         recs_df = ev_calc.recommend(df_race, odds, budget=10000)
 
         win_probs = win_model.predict_proba(df_race)
         place_probs = place_model.predict_proba(df_race)
 
+        win_probs_arr = win_model.predict_proba(df_race.sort_values("horse_number"))
+        place_probs_arr = place_model.predict_proba(df_race.sort_values("horse_number"))
+
         horses_out = []
         for i, (_, row) in enumerate(df_race.sort_values("horse_number").iterrows()):
             wo = row.get("win_odds")
             pop = row.get("popularity")
+            hn = int(row.get("horse_number", 0) or 0)
+            wp = float(win_probs_arr[i])
+            pp = float(place_probs_arr[i])
+            win_odds_val = float(wo) if wo and str(wo) not in ("nan", "None", "0.0", "0") else 0
+            pop_val = int(pop) if pop and str(pop) not in ("nan", "None", "0") else 0
+            # EV from scraped place odds
+            fukusho_odds = odds.get("fukusho", {}).get(hn, 0)
+            place_ev = round(pp * fukusho_odds, 3) if fukusho_odds else None
+            tan_odds = odds.get("tan", {}).get(hn, win_odds_val)
+            win_ev = round(wp * tan_odds, 3) if tan_odds else None
             horses_out.append({
-                "number": int(row.get("horse_number", 0) or 0),
+                "number": hn,
                 "frame": int(row.get("frame_number", 0) or 0),
                 "name": str(row.get("horse_name", "")),
                 "sex_age": str(row.get("sex_age", "") or ""),
                 "jockey": str(row.get("jockey_name", "") or ""),
-                "win_odds": float(wo) if wo and str(wo) not in ("nan", "None") else 0,
-                "popularity": int(pop) if pop and str(pop) not in ("nan", "None") else 0,
+                "win_odds": win_odds_val,
+                "popularity": pop_val,
+                "place_odds": round(fukusho_odds, 1) if fukusho_odds else 0,
                 "weight": 0,
                 "weight_diff": 0,
-                "win_prob": round(float(win_probs[i]), 3),
-                "place_prob": round(float(place_probs[i]), 3),
-                "score": int(min(99, max(1, place_probs[i] * 200))),
+                "win_prob": round(wp, 3),
+                "place_prob": round(pp, 3),
+                "place_ev": place_ev,
+                "win_ev": win_ev,
+                "score": int(min(99, max(1, pp * 200))),
                 "finish_order": None,
             })
 
