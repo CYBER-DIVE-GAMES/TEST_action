@@ -699,7 +699,7 @@ function renderRaceDetail(d){
       <div class="rh-venue">${d.venue} &nbsp;|&nbsp; ${d.date}</div>
       <div class="rh-title">${d.race_name}</div>
       <div class="rh-cond">
-        ${d.conditions.split('/').map(c=>`<span class="rh-tag">${c.trim()}</span>`).join('')}
+        ${(d.conditions||`${d.surface||''} / ${d.distance||''}m`).split('/').map(c=>`<span class="rh-tag">${c.trim()}</span>`).join('')}
         <span class="rh-tag">出走 ${d.field_count}頭</span>
       </div>
     </div>
