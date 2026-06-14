@@ -66,6 +66,13 @@ class FeatureBuilder:
         df = self._add_weight_features(df)
         df = self._add_odds_features(df)
 
+        # object型のまま残っている数値列を強制変換（LightGBMがobjectを受け付けないため）
+        for col in df.columns:
+            if df[col].dtype == object:
+                converted = pd.to_numeric(df[col], errors="coerce")
+                if converted.notna().sum() > 0:
+                    df[col] = converted
+
         logger.info(f"Features built: {len(df)} rows, {len(df.columns)} columns")
         return df
 
