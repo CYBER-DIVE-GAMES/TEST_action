@@ -881,6 +881,12 @@ def api_predict_url():
         df_race["win_odds"] = pd.to_numeric(df_race.get("win_odds", None), errors="coerce").fillna(0)
         df_race["popularity"] = pd.to_numeric(df_race.get("popularity", None), errors="coerce").fillna(0)
         df_race["weight_carried"] = pd.to_numeric(df_race.get("weight_carried", 55), errors="coerce").fillna(55)
+        df_race["horse_weight"] = pd.to_numeric(df_race.get("horse_weight", None), errors="coerce").fillna(0)
+        df_race["horse_weight_diff"] = pd.to_numeric(df_race.get("horse_weight_diff", None), errors="coerce").fillna(0)
+        df_race["finish_order"] = pd.to_numeric(df_race.get("finish_order", None), errors="coerce")
+        df_race["last_3f"] = pd.to_numeric(df_race.get("last_3f", None), errors="coerce")
+        df_race["horse_number"] = df_race["horse_number"].astype(float)
+        df_race["frame_number"] = df_race["frame_number"].astype(float)
 
         df_race["sex"] = df_race["sex_age"].str.extract(r"([牡牝騸セ])")
         df_race["age"] = pd.to_numeric(df_race["sex_age"].str.extract(r"(\d+)")[0], errors="coerce")
@@ -937,6 +943,16 @@ def api_predict_url():
             place_model.load()
 
         ev_calc = ExpectedValueCalculator(win_model, place_model)
+
+        # object型列を強制数値変換（LightGBMはobjectを受け付けない）
+        NON_NUMERIC = {"race_id", "horse_name", "horse_id", "jockey_name", "jockey_id",
+                       "trainer_name", "trainer_id", "race_name", "course", "course_code",
+                       "surface", "track_condition", "sex_age", "sex", "margin",
+                       "passing_order", "distance_cat", "sire", "dam_sire", "birth_date",
+                       "owner", "date"}
+        for col in df_race.columns:
+            if df_race[col].dtype == object and col not in NON_NUMERIC:
+                df_race[col] = pd.to_numeric(df_race[col], errors="coerce")
 
         # オッズ辞書を構築（スクレイピング済みの win_place_odds を優先）
         if win_place_odds:
