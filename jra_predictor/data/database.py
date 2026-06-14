@@ -77,6 +77,7 @@ class Database:
             owner TEXT,
             breeder TEXT,
             birth_place TEXT,
+            auction_price TEXT,
             sire TEXT,
             dam_sire TEXT,
             scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -141,6 +142,15 @@ class Database:
                 stmt = stmt.strip()
                 if stmt:
                     conn.execute(text(stmt))
+            # マイグレーション: 既存DBに不足カラムを追加
+            migrations = [
+                "ALTER TABLE horse_profile ADD COLUMN auction_price TEXT",
+            ]
+            for m in migrations:
+                try:
+                    conn.execute(text(m))
+                except Exception:
+                    pass  # already exists
             conn.commit()
         logger.info("Database initialized")
 
