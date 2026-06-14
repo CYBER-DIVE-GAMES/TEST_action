@@ -64,7 +64,7 @@ def _reset_browser():
     _playwright_instance = None
 
 
-def get_with_browser(url: str, wait_selector: str = None, timeout_ms: int = 15000) -> BeautifulSoup | None:
+def get_with_browser(url: str, wait_selector: str = None, timeout_ms: int = 60000) -> BeautifulSoup | None:
     """Playwrightでページを取得してBeautifulSoupに変換"""
     browser = _get_browser()
     if browser is None:
@@ -73,20 +73,23 @@ def get_with_browser(url: str, wait_selector: str = None, timeout_ms: int = 1500
     try:
         page = browser.new_page()
         page.set_extra_http_headers({"Accept-Language": "ja,en-US;q=0.9"})
-        page.goto(url, timeout=timeout_ms, wait_until="load")
+        page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
         if wait_selector:
             try:
-                page.wait_for_selector(wait_selector, timeout=8000)
+                page.wait_for_selector(wait_selector, timeout=15000)
             except Exception:
-                page.wait_for_timeout(4000)
+                page.wait_for_timeout(3000)
         else:
-            page.wait_for_timeout(4000)
+            page.wait_for_timeout(3000)
         html = page.content()
         return BeautifulSoup(html, "lxml")
     except Exception as e:
-        logger.warning(f"Playwright取得失敗 {url}: {e}")
-        # ブラウザが壊れている可能性があるのでリセット
-        _reset_browser()
+        err = str(e)
+        logger.warning(f"Playwright取得失敗 {url}: {err[:120]}")
+        # ブラウザプロセスが死んでいる場合のみリセット
+        if "closed" in err.lower() or "crashed" in err.lower() or "disconnected" in err.lower():
+            logger.info("ブラウザクラッシュ検出 → リセット")
+            _reset_browser()
         return None
     finally:
         if page:
