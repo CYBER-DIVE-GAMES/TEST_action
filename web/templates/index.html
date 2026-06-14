@@ -210,17 +210,20 @@ input[type=date]{color-scheme:dark;}
       <div id="urlPredictStatus" style="margin-top:8px;font-size:11px;color:var(--muted);display:none;"></div>
     </div>
 
-    <!-- REGISTERED RACES LIST -->
-    <div class="section-header">
-      <div class="section-title">📋 登録済みレース一覧</div>
+    <!-- REGISTERED RACES LIST (今日のみ・コンパクト) -->
+    <div class="section-header" style="margin-top:16px">
+      <div class="section-title">📋 登録済みレース（今日）</div>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="date" id="regDate" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-size:11px;" onchange="loadRegisteredRaces()">
-        <button class="btn btn-outline btn-sm" onclick="document.getElementById('regDate').value='';loadRegisteredRaces()">全件</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('regDate').value='';loadRegisteredRaces()">日付指定なし</button>
       </div>
     </div>
-    <div id="registeredRaceCards" class="race-cards">
-      <div class="empty">URLを貼って予測→登録するとここに表示されます</div>
-    </div>
+    <table class="log-table" style="margin-bottom:16px">
+      <thead><tr><th>R</th><th>競馬場</th><th>レース名</th><th>馬場/距離</th><th>複勝買い目</th><th style="white-space:nowrap">操作</th></tr></thead>
+      <tbody id="regRaceBody">
+        <tr><td colspan="6" class="empty">登録済みレースなし（URLを貼って予測→⭐登録）</td></tr>
+      </tbody>
+    </table>
 
     <!-- RACE DETAIL -->
     <div id="raceDetail" style="display:none"></div>
@@ -344,6 +347,7 @@ async function predictFromUrl(){
     if(j.status!=='ok') throw new Error(j.message);
     status.style.color='#10b981';
     status.textContent=`✅ ${j.data.field_count}頭の出走表を取得 → 予測完了`;
+    j.data.url=url;  // URLを保存（登録時に使用）
     _currentRaceData=j.data;
     const detail=document.getElementById('raceDetail');
     detail.style.display='block';
@@ -361,61 +365,56 @@ async function predictFromUrl(){
 // ===== REGISTERED RACES =====
 async function loadRegisteredRaces(){
   const d=document.getElementById('regDate').value;
-  const container=document.getElementById('registeredRaceCards');
-  container.innerHTML='<div class="loading"><div class="spinner"></div>読み込み中...</div>';
+  const tbody=document.getElementById('regRaceBody');
+  tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:12px"><div class="spinner" style="margin:auto"></div></td></tr>';
   try{
     const url='/api/registered-races'+(d?'?date='+d:'');
     const j=await(await fetch(url)).json();
     if(!j.races||!j.races.length){
-      container.innerHTML='<div class="empty">登録済みレースなし<br><span style="font-size:11px">URLを貼って予測→登録するとここに表示されます</span></div>';
+      tbody.innerHTML='<tr><td colspan="6" class="empty">登録済みレースなし（URLを貼って予測→⭐登録）</td></tr>';
       return;
     }
-    container.innerHTML=j.races.map(r=>registeredCardHTML(r)).join('');
-  }catch(e){container.innerHTML=`<div class="empty">エラー: ${e.message}</div>`;}
+    // 買い目を取得
+    const bj=await(await fetch('/api/race-bets?date='+(d||j.date||''))).json().catch(()=>({}));
+    const betMap={};
+    if(bj.bets) bj.bets.forEach(b=>{(betMap[b.race_id]=betMap[b.race_id]||[]).push(b.combination);});
+    tbody.innerHTML=j.races.map(r=>{
+      const surf=r.surface==='芝'?'🌿':'🟫';
+      const bets=betMap[r.race_id]||[];
+      const betStr=bets.length?`<span style="color:#10b981;font-weight:700">複勝 ${bets.join('/')}番</span>`:'<span style="color:var(--muted);font-size:10px">買い目なし</span>';
+      return `<tr>
+        <td style="font-weight:700;white-space:nowrap">${r.race_number}R</td>
+        <td style="white-space:nowrap">${r.course||'—'}</td>
+        <td style="font-weight:700">${r.race_name||r.race_id}</td>
+        <td style="white-space:nowrap;font-size:11px;color:var(--muted)">${surf}${r.surface||'—'} ${r.distance||'—'}m</td>
+        <td>${betStr}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-outline btn-sm" onclick="refreshOdds('${r.race_id}',this)" title="オッズ更新">🔄</button>
+          <button class="btn btn-green btn-sm" onclick="repredictRace('${r.race_id}',this)">再予測</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }catch(e){tbody.innerHTML=`<tr><td colspan="6" class="empty" style="color:var(--red)">エラー: ${e.message}</td></tr>`;}
 }
 
-function registeredCardHTML(r){
-  const surf=r.surface==='芝'?'🌿':'🟫';
-  return `<div class="race-card" onclick="reloadRaceById('${r.race_id}')">
-    <div class="rc-header">
-      <span class="rc-num">${r.race_number}R</span>
-      <span class="rc-course">${r.course} ${r.date||''}</span>
-    </div>
-    <div class="rc-name">${r.race_name||r.race_id}</div>
-    <div class="rc-cond">
-      <span class="rc-tag">${surf} ${r.surface||'—'}</span>
-      <span class="rc-tag">${r.distance||'—'}m</span>
-      <span class="rc-tag">${r.field_count||'—'}頭</span>
-    </div>
-    <div class="rc-footer">
-      <span class="rc-count" style="font-size:10px;color:var(--muted)">${r.registered_at||''}</span>
-      <div style="display:flex;gap:4px">
-        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();refreshOdds('${r.race_id}',this)">🔄 オッズ更新</button>
-        <button class="btn btn-green btn-sm" onclick="event.stopPropagation();reloadRaceById('${r.race_id}')">再予測</button>
-      </div>
-    </div>
-  </div>`;
-}
-
-async function reloadRaceById(raceId){
+async function repredictRace(raceId, btn){
   const detail=document.getElementById('raceDetail');
   detail.style.display='block';
-  detail.innerHTML='<div class="loading" style="min-height:200px"><div class="spinner"></div><div>予測中...</div></div>';
+  detail.innerHTML='<div class="loading" style="min-height:200px"><div class="spinner"></div><div style="margin-top:8px;color:var(--muted)">再予測中（1〜2分かかります）...</div></div>';
   detail.scrollIntoView({behavior:'smooth',block:'start'});
+  const orig=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='処理中...';}
   try{
-    // Use race_id input approach via predict-url with race_id directly
-    const res=await fetch('/api/race/'+raceId);
+    const res=await fetch('/api/repredict/'+raceId,{method:'POST',signal:AbortSignal.timeout(180000)});
     const j=await res.json();
-    if(j.status==='loading'){
-      detail.innerHTML=`<div class="loading"><div class="spinner"></div><div>${j.message}</div></div>`;
-      return;
-    }
-    if(j.status!=='ok') throw new Error(j.message||'予測失敗');
+    if(j.status!=='ok') throw new Error(j.message||'再予測失敗');
     _currentRaceData=j.data;
     detail.innerHTML=renderRaceDetail(j.data);
-    showToast('✅ 予測完了');
+    showToast('✅ 再予測完了');
   }catch(e){
-    detail.innerHTML=`<div class="empty" style="color:var(--red)">⚠️ ${e.message}</div>`;
+    detail.innerHTML=`<div class="empty" style="color:var(--red)">⚠️ ${e.name==='TimeoutError'?'タイムアウト':e.message}</div>`;
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=orig;}
   }
 }
 
@@ -423,12 +422,10 @@ async function refreshOdds(raceId, btn){
   const orig=btn.textContent;
   btn.disabled=true;btn.textContent='取得中...';
   try{
-    const res=await fetch('/api/refresh-odds/'+raceId,{method:'POST'});
+    const res=await fetch('/api/refresh-odds/'+raceId,{method:'POST',signal:AbortSignal.timeout(120000)});
     const j=await res.json();
     if(j.status!=='ok') throw new Error(j.message);
     showToast(`✅ オッズ更新完了（${j.updated}頭）`);
-    // Reload race if currently shown
-    if(_currentRaceData&&_currentRaceData.race_id===raceId) reloadRaceById(raceId);
   }catch(e){showToast('❌ オッズ更新失敗: '+e.message);}
   finally{btn.disabled=false;btn.textContent=orig;}
 }

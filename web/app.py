@@ -62,9 +62,15 @@ def _get_log_conn():
             race_number INTEGER,
             surface TEXT,
             distance INTEGER,
-            field_count INTEGER
+            field_count INTEGER,
+            url TEXT
         )
     """)
+    # 既存DBへのカラム追加（エラー無視）
+    try:
+        conn.execute("ALTER TABLE registered_races ADD COLUMN url TEXT")
+    except Exception:
+        pass
     conn.execute("""
         CREATE TABLE IF NOT EXISTS race_bets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -352,7 +358,7 @@ def api_race(race_id: str):
                  "expected_value":float(r["expected_value"]),"stake":int(r["stake"])}
                 for _,r in recs_df.iterrows() if str(r["bet_type"]) in allowed] if not recs_df.empty else []
 
-        course_code = race_id[8:10] if len(race_id) >= 10 else ""
+        course_code = race_id[4:6] if len(race_id) >= 6 else ""
         return jsonify({"status": "ok", "data": {
             "race_id": race_id,
             "race_name": sv("race_name") or race_id,
@@ -603,8 +609,8 @@ def api_register_race():
         conn = _get_log_conn()
         conn.execute("""
             INSERT OR REPLACE INTO registered_races
-              (race_id, race_name, date, course, race_number, surface, distance, field_count)
-            VALUES (?,?,?,?,?,?,?,?)
+              (race_id, race_name, date, course, race_number, surface, distance, field_count, url)
+            VALUES (?,?,?,?,?,?,?,?,?)
         """, (
             race_id,
             data.get("race_name", ""),
@@ -614,6 +620,7 @@ def api_register_race():
             data.get("surface", ""),
             data.get("distance", 0),
             data.get("field_count", 0),
+            data.get("url", ""),
         ))
         # 複勝推奨を race_bets に自動保存
         recs = [r for r in (data.get("recommendations") or []) if r.get("bet_type") == "複勝"]
@@ -644,21 +651,23 @@ def api_register_race():
 
 @app.route("/api/registered-races")
 def api_registered_races():
-    """登録済みレース一覧"""
-    date_q = request.args.get("date", "")
+    """登録済みレース一覧（デフォルト: 今日JST、2週間以上古いデータは自動削除）"""
+    from datetime import datetime, timezone, timedelta
+    JST = timezone(timedelta(hours=9))
+    today = datetime.now(JST).strftime("%Y-%m-%d")
+    date_q = request.args.get("date", today)
     try:
         conn = _get_log_conn()
-        if date_q:
-            rows = conn.execute(
-                "SELECT * FROM registered_races WHERE date=? ORDER BY date DESC, race_number DESC",
-                (date_q,)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM registered_races ORDER BY date DESC, race_number DESC LIMIT 200"
-            ).fetchall()
+        # 2週間以上古い登録を自動削除
+        cutoff = (datetime.now(JST) - timedelta(days=14)).strftime("%Y-%m-%d")
+        conn.execute("DELETE FROM registered_races WHERE date < ?", (cutoff,))
+        conn.commit()
+        rows = conn.execute(
+            "SELECT * FROM registered_races WHERE date=? ORDER BY race_number ASC",
+            (date_q,)
+        ).fetchall()
         conn.close()
-        return jsonify({"status": "ok", "races": [dict(r) for r in rows]})
+        return jsonify({"status": "ok", "races": [dict(r) for r in rows], "date": date_q})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -701,18 +710,26 @@ def api_update_race_bet(bet_id: int):
 
 @app.route("/api/refresh-odds/<race_id>", methods=["POST"])
 def api_refresh_odds(race_id: str):
-    """オッズを再取得してDBを更新し予測を返す"""
+    """オッズを再取得（登録済みURLから）"""
+    try:
+        conn = _get_log_conn()
+        row = conn.execute("SELECT url FROM registered_races WHERE race_id=?", (race_id,)).fetchone()
+        conn.close()
+        stored_url = row["url"] if row and row["url"] else None
+    except Exception:
+        stored_url = None
+
     try:
         from jra_predictor.scraper.race_result import RaceResultScraper
         from jra_predictor.data import Database
         import pandas as pd
 
-        db = Database()
         scraper = RaceResultScraper()
         win_place_odds = scraper._fetch_win_place_odds(race_id)
         if not win_place_odds:
-            return jsonify({"status": "error", "message": "オッズ取得失敗"}), 500
+            return jsonify({"status": "error", "message": "オッズ取得失敗（レース前後はオッズページがない場合があります）"}), 500
 
+        db = Database()
         df = db.read_table("race_results")
         df_race = df[df["race_id"] == race_id].copy()
         if df_race.empty:
@@ -727,6 +744,7 @@ def api_refresh_odds(race_id: str):
             hn = int(entry.get("horse_number") or 0)
             if hn in win_place_odds:
                 entry["win_odds"] = win_place_odds[hn].get("win_odds")
+                entry["place_odds_min"] = win_place_odds[hn].get("place_odds_min")
                 entry["popularity"] = pop_rank.get(hn, 0)
 
         from sqlalchemy import text as _text
@@ -739,6 +757,26 @@ def api_refresh_odds(race_id: str):
     except Exception as e:
         logger.exception(f"refresh-odds error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/repredict/<race_id>", methods=["POST"])
+def api_repredict(race_id: str):
+    """登録済みURLから再予測"""
+    try:
+        conn = _get_log_conn()
+        row = conn.execute("SELECT url FROM registered_races WHERE race_id=?", (race_id,)).fetchone()
+        conn.close()
+        if not row or not row["url"]:
+            return jsonify({"status": "error", "message": "URLが保存されていません。ホームからURLを貼って再予測してください。"}), 404
+        url = row["url"]
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+    # predict-url と同じロジックを内部で呼ぶ
+    with app.test_request_context('/api/predict-url', method='POST',
+                                   json={"url": url},
+                                   content_type='application/json'):
+        return api_predict_url()
 
 
 @app.route("/api/actual-stats")
@@ -867,7 +905,7 @@ def api_predict_url():
         logger.info(f"predict-url: parsed {len(entries)} horses")
 
         # ── Step 3: レース情報をページタイトルから取得 ──────────────────────
-        course_code = race_id[8:10] if len(race_id) >= 10 else ""
+        course_code = race_id[4:6] if len(race_id) >= 6 else ""
         race_number = int(race_id[10:12]) if len(race_id) >= 12 else 0
         info = {
             "race_id": race_id,
@@ -1086,7 +1124,7 @@ def api_predict_url():
         info = scraper.fetch_race_info(race_id) or {"race_id": race_id}
 
         # race_idから会場コード・レース番号だけ補完（日付はスクレイピング結果を使う）
-        course_code = race_id[8:10]
+        course_code = race_id[4:6]
         if not info.get("course"):
             info["course"] = COURSE_CODES.get(course_code, course_code)
         info["course_code"] = course_code
