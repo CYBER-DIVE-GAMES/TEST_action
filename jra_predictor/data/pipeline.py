@@ -26,14 +26,12 @@ class DataPipeline:
         """過去レースの一括収集"""
         logger.info(f"Collecting races {start_year}-{end_year}")
 
-        race_ids = list(self.race_list_scraper.iter_race_ids(
-            start_year, end_year, course_codes
-        ))
-        logger.info(f"Total races to process: {len(race_ids)}")
-
         horse_ids_seen = set()
+        race_ids_iter = self.race_list_scraper.iter_race_ids(
+            start_year, end_year, course_codes
+        )
 
-        for race_id in tqdm(race_ids, desc="Races"):
+        for race_id in tqdm(race_ids_iter, desc="Races"):
             if skip_existing and self.db.is_race_scraped(race_id):
                 continue
 
