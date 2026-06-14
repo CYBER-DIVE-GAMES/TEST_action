@@ -14,13 +14,21 @@ class FeatureBuilder:
     def __init__(self, db: Database):
         self.db = db
 
-    def build(self) -> pd.DataFrame:
-        """全特徴量を結合したDataFrameを構築"""
+    def build(self, since_date: str = None) -> pd.DataFrame:
+        """全特徴量を結合したDataFrameを構築
+
+        since_date: "2019-01-01" 形式で指定するとその日以降のデータのみ使用（高速化）
+        """
         logger.info("Building features...")
 
         df_result = self.db.read_table("race_results")
         df_info = self.db.read_table("race_info")
         df_horse = self.db.read_table("horse_profile")
+
+        # 日付フィルター（predict-url等で高速化するため）
+        if since_date and not df_result.empty and "date" in df_result.columns:
+            df_result = df_result[df_result["date"].astype(str) >= since_date]
+            logger.info(f"Filtered to {since_date} onwards: {len(df_result)} rows")
 
         if df_result.empty:
             logger.error("No data in DB. Run data import first.")

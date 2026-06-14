@@ -59,8 +59,6 @@ def _get_log_conn():
 def _load_in_background():
     try:
         _cache["loading"] = True
-        from jra_predictor.data import Database
-        from jra_predictor.features import FeatureBuilder
         from jra_predictor.models import RacePredictor
 
         win_model = RacePredictor("is_win")
@@ -69,13 +67,8 @@ def _load_in_background():
         place_model.load()
         _cache["win_model"] = win_model
         _cache["place_model"] = place_model
-
-        db = Database()
-        builder = FeatureBuilder(db)
-        df = builder.build()
-        _cache["df"] = df
         _cache["ready"] = True
-        logger.info(f"Web app ready: {len(df)} rows loaded")
+        logger.info("Models loaded successfully")
     except Exception as e:
         import traceback
         _cache["error"] = str(e)
@@ -673,7 +666,10 @@ def api_predict_url():
         from jra_predictor.backtest.engine import BacktestEngine
 
         builder = FeatureBuilder(db)
-        df_all = builder.build()
+        # 直近3年に絞って高速化（ローリング統計に十分な期間）
+        from datetime import datetime, timedelta
+        since = (datetime.now() - timedelta(days=365*3)).strftime("%Y-%m-%d")
+        df_all = builder.build(since_date=since)
         df_race = df_all[df_all["race_id"] == race_id]
 
         if df_race.empty:
