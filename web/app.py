@@ -479,15 +479,44 @@ def api_predict_url():
         from jra_predictor.data import Database
         import pandas as pd
 
-        soup = get_with_browser(url, wait_selector="tr.HorseList", timeout_ms=20000)
-        entries = []
-        if soup:
+        def _try_fetch(fetch_url):
+            s = get_with_browser(fetch_url, wait_selector="tr.HorseList", timeout_ms=25000)
+            if s is None:
+                return None, []
             rows_html = (
-                soup.select("tr.HorseList")
-                or soup.select("tr[class*='HorseList']")
-                or [tr for tr in soup.select("tr")
+                s.select("tr.HorseList")
+                or s.select("tr[class*='HorseList']")
+                or [tr for tr in s.select("tr")
                     if tr.select_one("a[href*='/horse/']") and len(tr.select("td")) >= 4]
             )
+            return s, rows_html
+
+        # shutuba.html → shutuba_past.html の順に試す
+        from config.settings import NETKEIBA_RACE
+        urls_to_try = [url]
+        if "shutuba.html" in url:
+            urls_to_try.append(f"{NETKEIBA_RACE}/race/shutuba_past.html?race_id={race_id}")
+        elif "shutuba_past.html" in url:
+            urls_to_try.append(f"{NETKEIBA_RACE}/race/shutuba.html?race_id={race_id}")
+
+        soup, rows_html = None, []
+        for try_url in urls_to_try:
+            logger.info(f"predict-url trying: {try_url}")
+            soup, rows_html = _try_fetch(try_url)
+            if rows_html:
+                logger.info(f"Got {len(rows_html)} rows from {try_url}")
+                break
+
+        # デバッグ情報
+        if soup and not rows_html:
+            all_tables = soup.find_all("table")
+            horse_links = soup.select("a[href*='/horse/']")
+            logger.warning(f"Page loaded but no horse rows. tables={len(all_tables)} horse_links={len(horse_links)}")
+            if horse_links:
+                logger.info(f"First horse link: {horse_links[0].get('href')}")
+
+        entries = []
+        if rows_html:
             for tr in rows_html:
                 tds = tr.select("td")
                 horse_link = tr.select_one("a[href*='/horse/']")
@@ -521,10 +550,17 @@ def api_predict_url():
                 })
 
         if not entries:
+            debug_info = ""
+            if soup:
+                tables = soup.find_all("table")
+                horse_links = soup.select("a[href*='/horse/']")
+                title = soup.title.string if soup.title else "なし"
+                debug_info = f" [ページタイトル:{title}, テーブル数:{len(tables)}, 馬リンク:{len(horse_links)}]"
             return jsonify({
                 "status": "error",
-                "message": f"出走馬が取得できませんでした。レースIDは {race_id} です。"
-                           " URLが正しいか確認してください（shutuba.html または shutuba_past.html）"
+                "message": f"出走馬が取得できませんでした (race_id={race_id}){debug_info}。"
+                           "出走表がまだ公開されていないか、レースが終了している可能性があります。"
+                           "通常はレース3〜4日前から出走表が公開されます。"
             }), 404
 
         # 2. DBに保存
