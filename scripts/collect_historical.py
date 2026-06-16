@@ -154,7 +154,29 @@ def main():
                         try:
                             odds = result_scraper.fetch_odds(race_id)
                             for bet_type, odds_dict in odds.items():
-                                if odds_dict:
+                                if not odds_dict:
+                                    continue
+                                # tanshoは {馬番: {'win_odds':x,'place_odds_min':y,...}} 形式
+                                # → 単勝/複勝を別々に展開してフラットに保存
+                                if bet_type == "tansho":
+                                    win_flat = {}
+                                    place_min_flat = {}
+                                    place_max_flat = {}
+                                    for num, v in odds_dict.items():
+                                        if isinstance(v, dict):
+                                            if v.get("win_odds") is not None:
+                                                win_flat[str(num)] = v["win_odds"]
+                                            if v.get("place_odds_min") is not None:
+                                                place_min_flat[str(num)] = v["place_odds_min"]
+                                            if v.get("place_odds_max") is not None:
+                                                place_max_flat[str(num)] = v["place_odds_max"]
+                                        else:
+                                            win_flat[str(num)] = v
+                                    if win_flat:
+                                        db.save_odds(race_id, "tansho", win_flat)
+                                    if place_min_flat:
+                                        db.save_odds(race_id, "fukusho", place_min_flat)
+                                else:
                                     db.save_odds(race_id, bet_type, odds_dict)
                         except Exception as e:
                             error_logger.warning(f"[{race_id}] odds取得失敗: {e}")
