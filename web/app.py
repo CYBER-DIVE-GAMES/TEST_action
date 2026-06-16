@@ -1314,14 +1314,15 @@ def api_predict_url():
         return jsonify({
             "status": "ok",
             "data": {
-                "race_id":   race_id,
-                "race_name": info["race_name"] or race_id,
-                "venue":     info["course"],
-                "date":      info["date"],
-                "distance":  info["distance"],
-                "surface":   info["surface"],
+                "race_id":     race_id,
+                "race_name":   info["race_name"] or race_id,
+                "race_number": race_number,
+                "venue":       info["course"],
+                "date":        info["date"],
+                "distance":    info["distance"],
+                "surface":     info["surface"],
                 "field_count": n,
-                "horses":    horses_out,
+                "horses":      horses_out,
                 "recommendations":     recommendations,
                 "has_recommendations": len(recommendations) > 0,
             }
