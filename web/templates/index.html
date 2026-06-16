@@ -451,8 +451,10 @@ function renderRaceDetail(d){
   const recs=(d.recommendations||[]).filter(r=>r.bet_type==='複勝');
   const hasRec=recs.length>0;
   const regData={...d, recommendations: recs};
+  const isShinsoba=/新馬|メイクデビュー/.test(d.race_name||'');
   return `
   <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+  ${isShinsoba?`<div style="background:#7c3a00;border:1px solid #f59e0b;border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#fde68a;font-size:13px">⚠️ 新馬戦の可能性があります。新馬戦は前走データなしのため確率精度が低下します。</div>`:''}
   <div class="race-hero">
     <div style="z-index:1">
       <div class="rh-venue">${d.venue||''} &nbsp;|&nbsp; ${d.date||''} &nbsp;${d.race_number?d.race_number+'R':''}</div>
