@@ -389,7 +389,6 @@ async function loadRegisteredRaces(){
         <td style="white-space:nowrap;font-size:11px;color:var(--muted)">${surf}${r.surface||'—'} ${r.distance||'—'}m</td>
         <td>${betStr}</td>
         <td style="white-space:nowrap">
-          <button class="btn btn-outline btn-sm" onclick="refreshOdds('${r.race_id}',this)" title="オッズ更新">🔄</button>
           <button class="btn btn-green btn-sm" onclick="repredictRace('${r.race_id}',this)">再予測</button>
           <button class="btn btn-sm" style="background:var(--red);color:#fff;border:none" onclick="deleteRegisteredRace('${r.race_id}','${(r.race_name||r.race_id).replace(/'/g,'')}',this)">🗑</button>
         </td>
@@ -465,7 +464,6 @@ function renderRaceDetail(d){
       </div>
     </div>
     <div class="rh-actions">
-      <button class="btn btn-outline btn-sm" onclick="refreshOdds('${d.race_id}',this)">🔄 オッズ更新</button>
       <button class="btn btn-green btn-sm" id="regBtn-${d.race_id}" onclick="registerRace(${JSON.stringify(regData).replace(/"/g,'&quot;')},this)">⭐ 登録</button>
     </div>
   </div>

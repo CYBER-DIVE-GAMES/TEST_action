@@ -300,6 +300,38 @@ def api_race(race_id: str):
             if col not in df.columns:
                 df[col] = float("nan")
 
+        # DBから過去成績を取得して特徴量を埋める
+        race_date_str = str(df["date"].iloc[0])[:10] if "date" in df.columns and len(df) else str(date.today())
+        course_code_h = race_id[4:6] if len(race_id) >= 6 else ""
+        surface_h = str(df["surface"].iloc[0]) if "surface" in df.columns and len(df) else ""
+        dist_h = int(float(df["distance"].iloc[0])) if "distance" in df.columns and len(df) else 1600
+        hist = _fetch_history_features(
+            df["horse_id"].tolist() if "horse_id" in df.columns else [],
+            df["jockey_id"].tolist() if "jockey_id" in df.columns else [],
+            df["trainer_id"].tolist() if "trainer_id" in df.columns else [],
+            race_date_str, course_code_h, surface_h, dist_h
+        )
+        horse_hist   = hist.get("horse", {})
+        jockey_hist  = hist.get("jockey", {})
+        trainer_hist = hist.get("trainer", {})
+        for col in ["win_rate_3","win_rate_5","win_rate_10","place_rate_3","place_rate_5","place_rate_10",
+                    "avg_popularity_3","avg_popularity_5","avg_odds_5",
+                    "prev_finish","prev2_finish","avg_last3f_5","days_since_last","career_runs",
+                    "horse_course_wins","horse_course_place","horse_surface_wins"]:
+            df[col] = df["horse_id"].map(lambda hid: horse_hist.get(hid, {}).get(col, float("nan"))) \
+                if "horse_id" in df.columns else float("nan")
+        df["odds_change"] = df.apply(
+            lambda row: (row["win_odds"] - horse_hist.get(row.get("horse_id",""), {}).get("_prev_odds", float("nan")))
+            if horse_hist.get(row.get("horse_id",""), {}).get("_prev_odds") is not None else float("nan"), axis=1
+        )
+        for col in ["jockey_win_rate_30","jockey_win_rate_100","jockey_place_rate_30",
+                    "jockey_place_rate_100","jockey_course_wins","jockey_dist_wins"]:
+            df[col] = df["jockey_id"].map(lambda jid: jockey_hist.get(jid, {}).get(col, float("nan"))) \
+                if "jockey_id" in df.columns else float("nan")
+        for col in ["trainer_win_rate_50","trainer_place_rate_50"]:
+            df[col] = df["trainer_id"].map(lambda tid: trainer_hist.get(tid, {}).get(col, float("nan"))) \
+                if "trainer_id" in df.columns else float("nan")
+
         NON_NUMERIC = {"race_id","horse_name","horse_id","jockey_name","jockey_id","trainer_name",
                        "race_name","course","course_code","surface","track_condition","sex_age","sex",
                        "margin","passing_order","distance_cat","date"}
