@@ -28,6 +28,7 @@ class ExpectedValueCalculator:
         df_race: pd.DataFrame,
         odds_dict: dict,
         budget: float = 10000,
+        place_prob_override: dict = None,
     ) -> pd.DataFrame:
         """
         1レース分の推奨馬券を返す
@@ -35,6 +36,7 @@ class ExpectedValueCalculator:
         df_race: 1レースの特徴量DataFrame（複数行）
         odds_dict: {"fukusho": {馬番: odds}, "umaren": {(i,j): odds}, ...}
         budget: 予算（円）
+        place_prob_override: {馬番: 複勝確率} オッズ除外の純粋能力スコアを使う場合に指定
 
         Returns: 推奨馬券DataFrame
         """
@@ -42,7 +44,7 @@ class ExpectedValueCalculator:
         place_prob = self.place_pred.predict_proba(df_race)
 
         horse_nums = df_race["horse_number"].values
-        prob_map = {n: {"win": w, "place": p}
+        prob_map = {n: {"win": w, "place": place_prob_override.get(int(n), p) if place_prob_override else p}
                     for n, w, p in zip(horse_nums, win_prob, place_prob)}
 
         recommendations = []

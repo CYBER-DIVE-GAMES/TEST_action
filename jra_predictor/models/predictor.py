@@ -168,13 +168,11 @@ class RacePredictor:
             "n_estimators": 500,
         }
 
-    def predict_proba(self, df: pd.DataFrame) -> np.ndarray:
+    def predict_proba(self, df: pd.DataFrame, exclude_odds: bool = False) -> np.ndarray:
         if self.model is None:
             raise RuntimeError("Model not trained. Call train() first.")
-        # モデルが記録している特徴量名を優先（訓練時と列数を一致させる）
         trained_cols = self.model.feature_name()
         if trained_cols:
-            # 訓練時にあった列のみ使用、なければNaNで補完
             for c in trained_cols:
                 if c not in df.columns:
                     df = df.copy()
@@ -182,7 +180,13 @@ class RacePredictor:
             feature_cols = trained_cols
         else:
             feature_cols = [c for c in FEATURE_COLS if c in df.columns]
-        X = df[feature_cols].fillna(-999)
+        X = df[feature_cols].fillna(-999).copy()
+        if exclude_odds:
+            odds_cols = ["popularity_norm", "relative_odds", "fav_odds",
+                         "avg_popularity_3", "avg_popularity_5", "avg_odds_5", "odds_change"]
+            for col in odds_cols:
+                if col in X.columns:
+                    X[col] = -999
         raw = self.model.predict(X)
         if self.calibrator is not None:
             return self.calibrator.transform(raw)
