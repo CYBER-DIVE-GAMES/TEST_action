@@ -15,43 +15,56 @@ from jra_predictor.data import Database
 
 db = Database()
 
-print("race_infoからrace_resultsへフィールドを補完中...")
-
-# race_infoから補完できるフィールド
-RACE_INFO_FIELDS = ["date", "course", "course_code", "race_number",
-                    "race_name", "distance", "surface", "weather", "track_condition"]
-
+# まず実態診断
+print("=== 診断 ===")
 with db.engine.connect() as conn:
-    for field in RACE_INFO_FIELDS:
-        result = conn.execute(text(f"""
-            UPDATE race_results
-            SET {field} = (
-                SELECT {field} FROM race_info
-                WHERE race_info.race_id = race_results.race_id
-            )
-            WHERE (race_results.{field} IS NULL OR race_results.{field} = '')
-              AND substr(race_results.race_id, 1, 4) >= '2022'
-        """))
-        conn.commit()
-        print(f"  {field}: {result.rowcount}行更新")
+    # horse_historyに2022年のrace_idが存在するか？
+    r = conn.execute(text("""
+        SELECT COUNT(*) as cnt,
+               COUNT(distance) as has_dist,
+               COUNT(surface) as has_surf
+        FROM horse_history
+        WHERE substr(race_id,1,4) >= '2022'
+    """)).fetchone()
+    print(f"horse_history 2022+: 総行={r[0]}, distance有={r[1]}, surface有={r[2]}")
 
-# race_infoにdistance/surfaceがない場合はhorse_historyから補完
-print("\nhorse_historyからdistance/surfaceを補完中...")
-with db.engine.connect() as conn:
-    for field in ["distance", "surface"]:
-        result = conn.execute(text(f"""
-            UPDATE race_results
-            SET {field} = (
-                SELECT {field} FROM horse_history
-                WHERE horse_history.race_id = race_results.race_id
-                  AND horse_history.{field} IS NOT NULL
-                LIMIT 1
-            )
-            WHERE (race_results.{field} IS NULL OR race_results.{field} = '')
-              AND substr(race_results.race_id, 1, 4) >= '2022'
-        """))
-        conn.commit()
-        print(f"  {field}: {result.rowcount}行更新")
+    # race_infoに2022年のdistanceが存在するか？
+    r2 = conn.execute(text("""
+        SELECT COUNT(*) as cnt, COUNT(distance) as has_dist
+        FROM race_info WHERE substr(race_id,1,4) >= '2022'
+    """)).fetchone()
+    print(f"race_info 2022+: 総行={r2[0]}, distance有={r2[1]}")
+
+    # race_resultsで実際にdistanceがNULLの行数
+    r3 = conn.execute(text("""
+        SELECT COUNT(*) FROM race_results
+        WHERE distance IS NULL AND substr(race_id,1,4) >= '2022'
+    """)).fetchone()
+    print(f"race_results 2022+ distance=NULL: {r3[0]}行")
+
+    # horse_historyとrace_resultsのrace_idが一致するか確認
+    r4 = conn.execute(text("""
+        SELECT COUNT(*) FROM race_results rr
+        JOIN horse_history hh ON hh.race_id = rr.race_id
+        WHERE rr.distance IS NULL AND substr(rr.race_id,1,4) >= '2022'
+          AND hh.distance IS NOT NULL
+    """)).fetchone()
+    print(f"horse_historyでdistance補完できる行: {r4[0]}行")
+
+    # horse_historyのrace_idサンプル
+    samples = conn.execute(text("""
+        SELECT DISTINCT race_id FROM horse_history
+        WHERE substr(race_id,1,4) >= '2022' LIMIT 5
+    """)).fetchall()
+    print(f"horse_history race_idサンプル: {[r[0] for r in samples]}")
+
+    # race_resultsのrace_idサンプル
+    samples2 = conn.execute(text("""
+        SELECT DISTINCT race_id FROM race_results
+        WHERE substr(race_id,1,4) >= '2022' LIMIT 5
+    """)).fetchall()
+    print(f"race_results race_idサンプル: {[r[0] for r in samples2]}")
+
 
 # 確認
 print("\n【補完後の確認】")
