@@ -68,18 +68,21 @@ class ExpectedValueCalculator:
         # ---- 複勝 ----
         if "fukusho" in odds_dict:
             candidates = []
-            # 市場の複勝確率（オッズの逆数×控除率補正）
             for horse_num, horse_odds in odds_dict["fukusho"].items():
                 if horse_num not in prob_map:
                     continue
                 p = prob_map[horse_num]["place"]
                 min_odds = horse_odds if isinstance(horse_odds, float) else horse_odds.get("place_odds_min", 1.0)
                 ev = p * min_odds
-                # 市場が示す複勝確率（控除率約25%考慮）
+
+                # 市場が示す複勝確率（控除率25%考慮）
                 market_place_prob = 1.0 / (min_odds * 0.75) if min_odds > 0 else 1.0
-                # モデルが市場より15%以上高く評価している場合のみ候補に
+
+                # モデルが市場を5%以上上回っている = 市場が見落としている馬
                 model_edge = p - market_place_prob
-                if ev >= self.ev_threshold["fukusho"] and p >= 0.40 and model_edge >= 0.0:
+
+                # 条件：EV≥1.10 かつ 複勝確率≥40% かつ 市場より5%以上高評価
+                if ev >= self.ev_threshold["fukusho"] and p >= 0.40 and model_edge >= 0.05:
                     stake = self._kelly_stake(p, min_odds, budget)
                     candidates.append({
                         "bet_type": "複勝",
@@ -89,11 +92,29 @@ class ExpectedValueCalculator:
                         "expected_value": round(ev, 3),
                         "stake": int(stake),
                         "_edge": model_edge,
+                        "_odds": min_odds,
                     })
-            # EVが高い順に最大2頭まで
+
+            # EV降順でソート
             candidates.sort(key=lambda x: x["expected_value"], reverse=True)
-            for c in candidates[:2]:
+
+            # 最大2頭、ガミ防止チェック
+            selected = []
+            for c in candidates:
+                if len(selected) == 0:
+                    selected.append(c)
+                elif len(selected) == 1:
+                    odds_a = selected[0]["_odds"]
+                    odds_b = c["_odds"]
+                    # 2頭とも複勝オッズ2.0未満だとガミる可能性が高いので除外
+                    if odds_a < 2.0 and odds_b < 2.0:
+                        continue
+                    selected.append(c)
+                    break
+
+            for c in selected:
                 c.pop("_edge", None)
+                c.pop("_odds", None)
                 recommendations.append(c)
 
         # ---- ワイド ----
