@@ -67,15 +67,18 @@ class BacktestEngine:
 
         for strat_name, cfg in strategies.items():
             records = []
+            debug = {"total": 0, "no_odds": 0, "no_gap": 0, "no_bet": 0, "ok": 0}
             for race_id in tqdm(race_ids, desc=strat_name, leave=False):
                 df_race = df_test[df_test["race_id"] == race_id].copy()
                 if len(df_race) < 3:
                     continue
+                debug["total"] += 1
 
                 odds = self._get_odds_for_race(race_id)
                 if not any(odds.values()):
                     odds = self._build_odds_from_df(df_race)
                 if not odds.get("fukusho"):
+                    debug["no_odds"] += 1
                     continue
 
                 # AIスコア計算（no_oddsモデル → レース内正規化）
@@ -95,6 +98,7 @@ class BacktestEngine:
                 # スコアギャップ条件
                 if cfg["score_gap"] > 0 and avg_pts > 0:
                     if top_pts / avg_pts < cfg["score_gap"]:
+                        debug["no_gap"] += 1
                         continue
 
                 top3_actual = set(df_race[df_race["finish_order"] <= 3]["horse_number"].tolist())
@@ -117,6 +121,7 @@ class BacktestEngine:
                     stake = 100
                     hit = hn in top3_actual
                     payout = stake * fo if hit else 0
+                    debug["ok"] += 1
                     records.append({
                         "race_id": race_id,
                         "horse_number": hn,
@@ -128,6 +133,7 @@ class BacktestEngine:
                     })
 
             all_results[strat_name] = records
+            print(f"\n[DEBUG {strat_name}] 総レース:{debug['total']} オッズなし:{debug['no_odds']} gap未満:{debug['no_gap']} ベット:{debug['ok']}")
 
         self._print_strategy_report(all_results, strategies)
         return all_results
