@@ -40,9 +40,16 @@ class DataPipeline:
             if info:
                 self.db.upsert_race_info(info)
 
-            # レース結果
+            # レース結果（race_infoのフィールドもマージして保存）
             df_result = self.result_scraper.fetch_race_result(race_id)
             if df_result is not None:
+                if info:
+                    for col in ["date", "course", "course_code", "race_number",
+                                "race_name", "distance", "surface", "weather", "track_condition"]:
+                        if col in info and col not in df_result.columns:
+                            df_result[col] = info[col]
+                        elif col in info and (df_result[col].isna().all()):
+                            df_result[col] = info[col]
                 self.db.upsert_race_results(df_result)
 
                 # 馬プロフィール（まだ取得していない馬のみ）
