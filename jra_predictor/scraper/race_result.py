@@ -104,16 +104,64 @@ class RaceResultScraper(BaseScaper):
         logger.info(f"fetch_race_entry: {len(rows)} horses for {race_id}")
         return pd.DataFrame(rows)
 
-    def fetch_race_result(self, race_id: str) -> pd.DataFrame | None:
-        """着順・タイム・馬情報を取得"""
+    def _fetch_race_page(self, race_id: str):
+        """レースページのsoupを取得（requests→Playwright順に試す）"""
         url = f"{NETKEIBA_BASE}/race/{race_id}/"
-
-        # requestsで試す
         soup = self.get(url)
-        # JSレンダリングが必要な場合はPlaywrightにフォールバック
         if soup is None or not soup.select("a[href*='/horse/']"):
             logger.info(f"Result page: falling back to Playwright for {race_id}")
             soup = self.get_browser(url, wait_selector="table.race_table_01")
+        return soup
+
+    def _parse_race_info_from_soup(self, soup, race_id: str) -> dict:
+        """soupからレース基本情報を抽出"""
+        from config.settings import COURSE_CODES
+        info = {"race_id": race_id}
+        try:
+            # レース名
+            for sel in ["div.race_head_inner h1", "h1.RaceName", "h1"]:
+                el = soup.select_one(sel)
+                if el and el.get_text(strip=True):
+                    info["race_name"] = el.get_text(strip=True)
+                    break
+
+            # 距離・馬場・天候・馬場状態・日付
+            text = ""
+            for sel in ["div.data_intro", "div.RaceData01", "div.race_data", "div.mainrace_data"]:
+                el = soup.select_one(sel)
+                if el:
+                    text = el.get_text()
+                    break
+            # どのdivも取れない場合はページ全体のテキストで試す
+            if not text:
+                text = soup.get_text()
+
+            m = re.search(r"(芝|ダ|障)[^\d]*(\d{3,4})m", text)
+            if m:
+                info["surface"] = m.group(1)
+                info["distance"] = int(m.group(2))
+
+            m = re.search(r"天候\s*[:：]\s*(\S+)", text)
+            info["weather"] = m.group(1) if m else ""
+
+            m = re.search(r"馬場\s*[:：]\s*(\S+)", text)
+            info["track_condition"] = m.group(1) if m else ""
+
+            m = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", text)
+            if m:
+                info["date"] = f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+
+            course_code = race_id[8:10]
+            info["course"] = COURSE_CODES.get(course_code, course_code)
+            info["course_code"] = course_code
+            info["race_number"] = int(race_id[10:12]) if len(race_id) >= 12 else 0
+        except Exception as e:
+            logger.warning(f"Race info parse error {race_id}: {e}")
+        return info
+
+    def fetch_race_result(self, race_id: str) -> pd.DataFrame | None:
+        """着順・タイム・馬情報を取得（race_infoも同時に更新）"""
+        soup = self._fetch_race_page(race_id)
         if soup is None:
             return None
 
@@ -132,7 +180,6 @@ class RaceResultScraper(BaseScaper):
             tds = tr.select("td")
             if len(tds) < 6:
                 continue
-            # 馬リンクがない行（ヘッダー等）はスキップ
             if not tr.select_one("a[href*='/horse/']"):
                 continue
             row = self._parse_result_row(tds, race_id)
@@ -144,6 +191,14 @@ class RaceResultScraper(BaseScaper):
 
         df = pd.DataFrame(rows)
         df["race_id"] = race_id
+
+        # 同じsoupからrace_info情報もDFに付与
+        info = self._parse_race_info_from_soup(soup, race_id)
+        for col in ["date", "course", "course_code", "race_number", "race_name",
+                    "distance", "surface", "weather", "track_condition"]:
+            if info.get(col):
+                df[col] = info[col]
+
         return df
 
     def _parse_result_row(self, tds, race_id: str) -> dict | None:
@@ -201,43 +256,10 @@ class RaceResultScraper(BaseScaper):
 
     def fetch_race_info(self, race_id: str) -> dict | None:
         """レース基本情報（距離・馬場・天候など）を取得"""
-        url = f"{NETKEIBA_BASE}/race/{race_id}/"
-        soup = self.get(url)
+        soup = self._fetch_race_page(race_id)
         if soup is None:
             return None
-
-        info = {"race_id": race_id}
-        try:
-            title = soup.select_one("div.race_head_inner h1")
-            info["race_name"] = title.get_text(strip=True) if title else ""
-
-            data_intro = soup.select_one("div.data_intro")
-            if data_intro:
-                text = data_intro.get_text()
-                m = re.search(r"(芝|ダ|障)(\d+)m", text)
-                if m:
-                    info["surface"] = m.group(1)
-                    info["distance"] = int(m.group(2))
-
-                m = re.search(r"天候：(\S+)", text)
-                info["weather"] = m.group(1) if m else ""
-
-                m = re.search(r"馬場：(\S+)", text)
-                info["track_condition"] = m.group(1) if m else ""
-
-                m = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", text)
-                if m:
-                    info["date"] = f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
-
-                course_code = race_id[8:10]
-                from config.settings import COURSE_CODES
-                info["course"] = COURSE_CODES.get(course_code, course_code)
-                info["course_code"] = course_code
-                info["race_number"] = int(race_id[10:12]) if len(race_id) >= 12 else 0
-        except Exception as e:
-            logger.warning(f"Race info parse error {race_id}: {e}")
-
-        return info
+        return self._parse_race_info_from_soup(soup, race_id)
 
     def fetch_odds(self, race_id: str) -> dict:
         """単勝・複勝・馬連・ワイド・3連複オッズを取得"""
