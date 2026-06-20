@@ -75,14 +75,8 @@ class ExpectedValueCalculator:
                 min_odds = horse_odds if isinstance(horse_odds, float) else horse_odds.get("place_odds_min", 1.0)
                 ev = p * min_odds
 
-                # 市場が示す複勝確率（控除率25%考慮）
-                market_place_prob = 1.0 / (min_odds * 0.75) if min_odds > 0 else 1.0
-
-                # モデルが市場を5%以上上回っている = 市場が見落としている馬
-                model_edge = p - market_place_prob
-
-                # 条件：EV≥1.10 かつ 複勝確率≥40% かつ 市場より5%以上高評価
-                if ev >= self.ev_threshold["fukusho"] and p >= 0.40 and model_edge >= 0.05:
+                # 条件：AIスコア（複勝確率）× オッズ = 期待値 ≥ 1.10 かつ 複勝確率≥40%
+                if ev >= self.ev_threshold["fukusho"] and p >= 0.40:
                     stake = self._kelly_stake(p, min_odds, budget)
                     candidates.append({
                         "bet_type": "複勝",
@@ -91,7 +85,6 @@ class ExpectedValueCalculator:
                         "odds": min_odds,
                         "expected_value": round(ev, 3),
                         "stake": int(stake),
-                        "_edge": model_edge,
                         "_odds": min_odds,
                     })
 
@@ -113,7 +106,6 @@ class ExpectedValueCalculator:
                     break
 
             for c in selected:
-                c.pop("_edge", None)
                 c.pop("_odds", None)
                 recommendations.append(c)
 
