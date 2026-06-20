@@ -25,11 +25,6 @@ class BacktestEngine:
         tune_hyperparams: bool = False,
         ev_threshold_override: dict = None,
     ) -> dict:
-        """
-        過去N年をテスト期間として、前データで学習→テストデータで予測・集計
-
-        Returns: 馬券種別の的中率・回収率レポート
-        """
         builder = FeatureBuilder(self.db)
         df = builder.build()
         if df.empty:
@@ -37,30 +32,18 @@ class BacktestEngine:
 
         df["date"] = pd.to_datetime(df["date"])
         cutoff = df["date"].max() - pd.DateOffset(years=test_years)
-
-        df_train = df[df["date"] < cutoff].copy()
         df_test = df[df["date"] >= cutoff].copy()
 
-        logger.info(f"Train: {len(df_train)} rows ({df_train['date'].min().date()} - {df_train['date'].max().date()})")
-        logger.info(f"Test:  {len(df_test)} rows ({df_test['date'].min().date()} - {df_test['date'].max().date()})")
+        logger.info(f"Test期間: {df_test['date'].min().date()} - {df_test['date'].max().date()} ({len(df_test)}行)")
 
-        # モデル学習（通常 + no_odds）
+        # 学習済みモデルをロード（再学習しない）
         win_model   = RacePredictor("is_win")
         place_model = RacePredictor("is_place")
-        win_model.train(df_train, tune_hyperparams=tune_hyperparams)
-        place_model.train(df_train, tune_hyperparams=tune_hyperparams)
-        win_model.save()
-        place_model.save()
-
         score_model = RacePredictor("is_place", no_odds=True)
-        score_model.train(df_train, tune_hyperparams=tune_hyperparams)
-        score_model.save()
+        win_model.load()
+        place_model.load()
+        score_model.load()
 
-        # 評価
-        place_eval = place_model.evaluate(df_test)
-        logger.info(f"Place model - AUC: {place_eval['auc']:.4f}, Brier: {place_eval['brier']:.4f}")
-
-        # 戦略比較バックテスト
         report = self.run_strategy_comparison(
             df_test, win_model, place_model, score_model, budget_per_race, ev_threshold_override
         )
@@ -126,8 +109,9 @@ class BacktestEngine:
                         continue
                     if fo < cfg["min_odds"]:
                         continue
-                    pop = int(row.get("popularity") or 99)
-                    if pop > cfg.get("max_popularity", 99):
+                    pop_raw = row.get("popularity")
+                    pop = int(pop_raw) if pop_raw and str(pop_raw) not in ("", "nan", "None") else 0
+                    if pop > 0 and pop > cfg.get("max_popularity", 99):
                         continue
 
                     stake = 100
