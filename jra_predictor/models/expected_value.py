@@ -67,23 +67,34 @@ class ExpectedValueCalculator:
 
         # ---- 複勝 ----
         if "fukusho" in odds_dict:
+            candidates = []
+            # 市場の複勝確率（オッズの逆数×控除率補正）
             for horse_num, horse_odds in odds_dict["fukusho"].items():
                 if horse_num not in prob_map:
                     continue
                 p = prob_map[horse_num]["place"]
-                # 複勝は最小オッズで計算（保守的）
                 min_odds = horse_odds if isinstance(horse_odds, float) else horse_odds.get("place_odds_min", 1.0)
                 ev = p * min_odds
-                if ev >= self.ev_threshold["fukusho"]:
+                # 市場が示す複勝確率（控除率約25%考慮）
+                market_place_prob = 1.0 / (min_odds * 0.75) if min_odds > 0 else 1.0
+                # モデルが市場より15%以上高く評価している場合のみ候補に
+                model_edge = p - market_place_prob
+                if ev >= self.ev_threshold["fukusho"] and p >= 0.40 and model_edge >= 0.0:
                     stake = self._kelly_stake(p, min_odds, budget)
-                    recommendations.append({
+                    candidates.append({
                         "bet_type": "複勝",
                         "combination": str(horse_num),
                         "probability": round(p, 4),
                         "odds": min_odds,
                         "expected_value": round(ev, 3),
                         "stake": int(stake),
+                        "_edge": model_edge,
                     })
+            # EVが高い順に最大2頭まで
+            candidates.sort(key=lambda x: x["expected_value"], reverse=True)
+            for c in candidates[:2]:
+                c.pop("_edge", None)
+                recommendations.append(c)
 
         # ---- ワイド ----
         if "wide" in odds_dict:

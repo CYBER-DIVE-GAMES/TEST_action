@@ -521,7 +521,7 @@ function horseTableHTML(horses){
 }
 
 function recsHTML(recs){
-  if(!recs.length) return `<div class="no-bet"><div class="no-bet-icon">🚫</div><div style="font-weight:700;margin-bottom:4px">買い目なし</div><div style="font-size:11px">EV≥1.10の複勝馬券がありません</div></div>`;
+  if(!recs.length) return `<div class="no-bet"><div class="no-bet-icon">🚫</div><div style="font-weight:700;margin-bottom:4px">買い目なし</div><div style="font-size:11px">条件（EV≥1.08・複勝確率≥40%・市場優位）を満たす馬がいません</div></div>`;
   return `<div class="rec-list">${recs.map(r=>`
     <div class="rec-item">
       <div class="rec-left">
