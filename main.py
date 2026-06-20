@@ -12,6 +12,7 @@ import sys
 import logging
 import argparse
 from pathlib import Path
+from config.settings import TEST_YEARS
 
 logging.basicConfig(
     level=logging.INFO,
@@ -383,7 +384,7 @@ def main():
 
     # backtest
     p_bt = sub.add_parser("backtest", help="バックテスト実行")
-    p_bt.add_argument("--years", type=int, default=2, help="テスト期間（年）")
+    p_bt.add_argument("--years", type=int, default=TEST_YEARS, help="テスト期間（年）")
     p_bt.add_argument("--budget", type=float, default=10000, help="1レースあたりの予算（円）")
     p_bt.add_argument("--sweep", action="store_true", help="EV閾値を段階的に変えて比較")
 

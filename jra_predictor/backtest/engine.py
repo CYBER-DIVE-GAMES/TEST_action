@@ -39,13 +39,18 @@ class BacktestEngine:
         print(f"[INFO] テスト期間: {df_test['date'].min().date()} 〜 {df_test['date'].max().date()} ({len(df_test)}行)")
         print(f"[INFO] テストレース数: {df_test['race_id'].nunique()}")
 
-        # 学習済みモデルをロード（再学習しない）
+        # テスト期間より前のデータで再学習（時系列リーク防止）
+        df_train = df[df["date"] < cutoff].copy()
+        print(f"[INFO] 学習データ: {df_train['date'].min().date()} 〜 {df_train['date'].max().date()} ({len(df_train)}行)")
+
         win_model   = RacePredictor("is_win")
         place_model = RacePredictor("is_place")
         score_model = RacePredictor("is_place", no_odds=True)
-        win_model.load()
-        place_model.load()
-        score_model.load()
+        print("[INFO] テスト期間前データでモデルを学習中...")
+        win_model.train(df_train)
+        place_model.train(df_train)
+        score_model.train(df_train)
+        print("[INFO] 学習完了")
 
         report = self.run_strategy_comparison(
             df_test, win_model, place_model, score_model, budget_per_race, ev_threshold_override
