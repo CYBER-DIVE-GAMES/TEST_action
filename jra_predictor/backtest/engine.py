@@ -76,11 +76,25 @@ class BacktestEngine:
         ev_threshold_override: dict = None,
     ) -> dict:
         strategies = {
-            "A_top1_all":        {"top_n": 1, "min_odds": 0,   "score_gap": 0},
-            "B_top1_odds2up":    {"top_n": 1, "min_odds": 2.0, "score_gap": 0},
-            "C_top1_gap":        {"top_n": 1, "min_odds": 0,   "score_gap": 1.5},
-            "D_top2_all":        {"top_n": 2, "min_odds": 0,   "score_gap": 0},
-            "E_top1_odds2_gap":  {"top_n": 1, "min_odds": 2.0, "score_gap": 1.5},
+            # 基準線
+            "A_top1_all":           {"top_n": 1, "min_odds": 0,   "score_gap": 0,   "max_popularity": 99},
+            "D_top2_all":           {"top_n": 2, "min_odds": 0,   "score_gap": 0,   "max_popularity": 99},
+            # オッズフィルタ単体（D系）
+            "D_top2_odds2up":       {"top_n": 2, "min_odds": 2.0, "score_gap": 0,   "max_popularity": 99},
+            "D_top2_odds3up":       {"top_n": 2, "min_odds": 3.0, "score_gap": 0,   "max_popularity": 99},
+            "D_top2_odds4up":       {"top_n": 2, "min_odds": 4.0, "score_gap": 0,   "max_popularity": 99},
+            # スコアギャップフィルタ（D系）
+            "D_top2_gap1.3":        {"top_n": 2, "min_odds": 0,   "score_gap": 1.3, "max_popularity": 99},
+            "D_top2_gap1.5":        {"top_n": 2, "min_odds": 0,   "score_gap": 1.5, "max_popularity": 99},
+            # 組み合わせ（D系）
+            "D_top2_odds2_gap1.3":  {"top_n": 2, "min_odds": 2.0, "score_gap": 1.3, "max_popularity": 99},
+            "D_top2_odds2_gap1.5":  {"top_n": 2, "min_odds": 2.0, "score_gap": 1.5, "max_popularity": 99},
+            "D_top2_odds3_gap1.3":  {"top_n": 2, "min_odds": 3.0, "score_gap": 1.3, "max_popularity": 99},
+            # 人気上限フィルタ（1〜6番人気まで）
+            "D_top2_pop6":          {"top_n": 2, "min_odds": 0,   "score_gap": 0,   "max_popularity": 6},
+            "D_top2_odds2_pop6":    {"top_n": 2, "min_odds": 2.0, "score_gap": 0,   "max_popularity": 6},
+            # 参考：E戦略ベース
+            "E_top1_odds2_gap":     {"top_n": 1, "min_odds": 2.0, "score_gap": 1.5, "max_popularity": 99},
         }
 
         all_results = {}
@@ -129,6 +143,9 @@ class BacktestEngine:
                     if fo <= 0:
                         continue
                     if fo < cfg["min_odds"]:
+                        continue
+                    pop = int(row.get("popularity") or 99)
+                    if pop > cfg.get("max_popularity", 99):
                         continue
 
                     stake = 100
