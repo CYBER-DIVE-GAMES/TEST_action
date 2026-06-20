@@ -44,18 +44,30 @@ FEATURE_COLS = [
     "n_frontrunners", "pace_pressure",
 ]
 
+# オッズ・人気を除いた純粋能力feature（AIスコア用モデル）
+FEATURE_COLS_NO_ODDS = [c for c in FEATURE_COLS if c not in {
+    "popularity_norm", "relative_odds", "fav_odds",
+    "avg_popularity_3", "avg_popularity_5", "avg_odds_5", "odds_change",
+}]
+
 
 class RacePredictor:
-    def __init__(self, target: str = "is_win"):
+    def __init__(self, target: str = "is_win", no_odds: bool = False):
         self.target = target
+        self.no_odds = no_odds
         self.model = None
         self.calibrator = None
         self.feature_importance_ = None
-        self.model_path = MODEL_DIR / f"lgbm_{target}.pkl"
-        self.calibrator_path = MODEL_DIR / f"calibrator_{target}.pkl"
+        suffix = "_no_odds" if no_odds else ""
+        self.model_path = MODEL_DIR / f"lgbm_{target}{suffix}.pkl"
+        self.calibrator_path = MODEL_DIR / f"calibrator_{target}{suffix}.pkl"
+
+    @property
+    def _feature_cols(self):
+        return FEATURE_COLS_NO_ODDS if self.no_odds else FEATURE_COLS
 
     def train(self, df: pd.DataFrame, tune_hyperparams: bool = False):
-        feature_cols = [c for c in FEATURE_COLS if c in df.columns]
+        feature_cols = [c for c in self._feature_cols if c in df.columns]
 
         df_sorted = df.sort_values("date").reset_index(drop=True)
         X = df_sorted[feature_cols].fillna(-999)
@@ -168,7 +180,7 @@ class RacePredictor:
             "n_estimators": 500,
         }
 
-    def predict_proba(self, df: pd.DataFrame, exclude_odds: bool = False) -> np.ndarray:
+    def predict_proba(self, df: pd.DataFrame) -> np.ndarray:
         if self.model is None:
             raise RuntimeError("Model not trained. Call train() first.")
         trained_cols = self.model.feature_name()
@@ -179,14 +191,8 @@ class RacePredictor:
                     df[c] = float("nan")
             feature_cols = trained_cols
         else:
-            feature_cols = [c for c in FEATURE_COLS if c in df.columns]
-        X = df[feature_cols].fillna(-999).copy()
-        if exclude_odds:
-            odds_cols = ["popularity_norm", "relative_odds", "fav_odds",
-                         "avg_popularity_3", "avg_popularity_5", "avg_odds_5", "odds_change"]
-            for col in odds_cols:
-                if col in X.columns:
-                    X[col] = -999
+            feature_cols = [c for c in self._feature_cols if c in df.columns]
+        X = df[feature_cols].fillna(-999)
         raw = self.model.predict(X)
         if self.calibrator is not None:
             return self.calibrator.transform(raw)

@@ -1463,15 +1463,22 @@ def api_predict_url():
         # ── Step 6: モデル予測 ────────────────────────────────────────────────
         win_model   = _cache.get("win_model")   or RacePredictor("is_win")
         place_model = _cache.get("place_model") or RacePredictor("is_place")
+        score_model = _cache.get("score_model") or RacePredictor("is_place", no_odds=True)
         if not _cache.get("win_model"):   win_model.load()
         if not _cache.get("place_model"): place_model.load()
+        if not _cache.get("score_model"):
+            try:
+                score_model.load()
+                _cache["score_model"] = score_model
+            except Exception:
+                score_model = place_model  # no_oddsモデル未学習時はフォールバック
 
         df_sorted = df.sort_values("horse_number").reset_index(drop=True)
         win_probs   = win_model.predict_proba(df_sorted)
         place_probs = place_model.predict_proba(df_sorted)
 
-        # オッズ系feature除外の純粋能力スコア
-        ai_raw = place_model.predict_proba(df_sorted, exclude_odds=True)
+        # AIスコア：no_oddsモデルの出力
+        ai_raw = score_model.predict_proba(df_sorted)
 
         # レース内正規化 → 相対勝利確率（合計=1）
         n_horses = len(df_sorted)

@@ -44,27 +44,131 @@ class BacktestEngine:
         logger.info(f"Train: {len(df_train)} rows ({df_train['date'].min().date()} - {df_train['date'].max().date()})")
         logger.info(f"Test:  {len(df_test)} rows ({df_test['date'].min().date()} - {df_test['date'].max().date()})")
 
-        # モデル学習
-        win_model = RacePredictor("is_win")
+        # モデル学習（通常 + no_odds）
+        win_model   = RacePredictor("is_win")
         place_model = RacePredictor("is_place")
         win_model.train(df_train, tune_hyperparams=tune_hyperparams)
         place_model.train(df_train, tune_hyperparams=tune_hyperparams)
         win_model.save()
         place_model.save()
 
+        score_model = RacePredictor("is_place", no_odds=True)
+        score_model.train(df_train, tune_hyperparams=tune_hyperparams)
+        score_model.save()
+
         # 評価
-        win_eval = win_model.evaluate(df_test)
         place_eval = place_model.evaluate(df_test)
-        logger.info(f"Win model  - AUC: {win_eval['auc']:.4f}, LogLoss: {win_eval['logloss']:.4f}, Brier: {win_eval['brier']:.4f}")
-        logger.info(f"Place model - AUC: {place_eval['auc']:.4f}, LogLoss: {place_eval['logloss']:.4f}, Brier: {place_eval['brier']:.4f}")
+        logger.info(f"Place model - AUC: {place_eval['auc']:.4f}, Brier: {place_eval['brier']:.4f}")
 
-        # バックテスト本体
-        ev_calc = ExpectedValueCalculator(win_model, place_model, ev_threshold_override)
-        results = self._simulate(ev_calc, df_test, budget_per_race)
-
-        report = self._calc_report(results)
-        self._print_report(report)
+        # 戦略比較バックテスト
+        report = self.run_strategy_comparison(
+            df_test, win_model, place_model, score_model, budget_per_race, ev_threshold_override
+        )
         return report
+
+    def run_strategy_comparison(
+        self,
+        df_test: pd.DataFrame,
+        win_model: "RacePredictor",
+        place_model: "RacePredictor",
+        score_model: "RacePredictor",
+        budget: float,
+        ev_threshold_override: dict = None,
+    ) -> dict:
+        strategies = {
+            "A_top1_all":        {"top_n": 1, "min_odds": 0,   "score_gap": 0},
+            "B_top1_odds2up":    {"top_n": 1, "min_odds": 2.0, "score_gap": 0},
+            "C_top1_gap":        {"top_n": 1, "min_odds": 0,   "score_gap": 1.5},
+            "D_top2_all":        {"top_n": 2, "min_odds": 0,   "score_gap": 0},
+            "E_top1_odds2_gap":  {"top_n": 1, "min_odds": 2.0, "score_gap": 1.5},
+        }
+
+        all_results = {}
+        race_ids = df_test["race_id"].unique()
+
+        for strat_name, cfg in strategies.items():
+            records = []
+            for race_id in tqdm(race_ids, desc=strat_name, leave=False):
+                df_race = df_test[df_test["race_id"] == race_id].copy()
+                if len(df_race) < 3:
+                    continue
+
+                odds = self._get_odds_for_race(race_id)
+                if not any(odds.values()):
+                    odds = self._build_odds_from_df(df_race)
+                if not odds.get("fukusho"):
+                    continue
+
+                # AIスコア計算（no_oddsモデル → レース内正規化）
+                ai_raw = score_model.predict_proba(df_race)
+                total = ai_raw.sum()
+                ai_win = ai_raw / total if total > 0 else ai_raw
+                n = len(df_race)
+                ai_pts = (ai_win * 100 * n).astype(int)
+
+                df_race = df_race.copy()
+                df_race["_ai_pts"] = ai_pts
+                df_race_sorted = df_race.sort_values("_ai_pts", ascending=False).reset_index(drop=True)
+
+                avg_pts = ai_pts.mean()
+                top_pts = df_race_sorted["_ai_pts"].iloc[0]
+
+                # スコアギャップ条件
+                if cfg["score_gap"] > 0 and avg_pts > 0:
+                    if top_pts / avg_pts < cfg["score_gap"]:
+                        continue
+
+                top3_actual = set(df_race[df_race["finish_order"] <= 3]["horse_number"].tolist())
+                winner = df_race[df_race["finish_order"] == 1]["horse_number"].values
+                winner = winner[0] if len(winner) > 0 else None
+
+                for rank in range(min(cfg["top_n"], len(df_race_sorted))):
+                    row = df_race_sorted.iloc[rank]
+                    hn = int(row["horse_number"])
+                    fo = odds["fukusho"].get(hn, 0)
+                    if fo <= 0:
+                        continue
+                    if fo < cfg["min_odds"]:
+                        continue
+
+                    stake = 100
+                    hit = hn in top3_actual
+                    payout = stake * fo if hit else 0
+                    records.append({
+                        "race_id": race_id,
+                        "horse_number": hn,
+                        "ai_pts": top_pts,
+                        "fukusho_odds": fo,
+                        "stake": stake,
+                        "hit": int(hit),
+                        "payout": payout,
+                    })
+
+            all_results[strat_name] = records
+
+        self._print_strategy_report(all_results, strategies)
+        return all_results
+
+    @staticmethod
+    def _print_strategy_report(all_results: dict, strategies: dict):
+        print("\n" + "="*75)
+        print("戦略比較バックテスト（複勝・AIスコアベース）")
+        print(f"{'戦略':<22} {'ベット':>7} {'的中率':>7} {'回収率':>7} {'収支':>12} {'平均オッズ':>10}")
+        print("-"*75)
+        for name, records in all_results.items():
+            if not records:
+                print(f"  {name:<20} データなし")
+                continue
+            df = pd.DataFrame(records)
+            n = len(df)
+            hits = df["hit"].sum()
+            stake_total = df["stake"].sum()
+            pay_total = df["payout"].sum()
+            avg_odds = df["fukusho_odds"].mean()
+            roi = pay_total / stake_total * 100 if stake_total > 0 else 0
+            profit = pay_total - stake_total
+            print(f"  {name:<20} {n:>7,} {hits/n*100:>6.1f}% {roi:>6.1f}% ¥{profit:>+10,} {avg_odds:>9.2f}倍")
+        print("="*75)
 
     def _simulate(
         self,

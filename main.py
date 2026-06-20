@@ -50,11 +50,19 @@ def cmd_train(args):
         logger.error("No data. Run 'collect' first.")
         return
 
+    # 通常モデル（オッズ含む）
     for target in ["is_win", "is_place"]:
         model = RacePredictor(target)
         model.train(df, tune_hyperparams=args.tune)
         model.save()
         logger.info(f"{target} model saved.")
+
+    # AIスコア用モデル（オッズ・人気feature除外）
+    for target in ["is_win", "is_place"]:
+        model = RacePredictor(target, no_odds=True)
+        model.train(df, tune_hyperparams=args.tune)
+        model.save()
+        logger.info(f"{target} no_odds model saved.")
 
 
 def cmd_backtest(args):
