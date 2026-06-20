@@ -76,25 +76,25 @@ class BacktestEngine:
         ev_threshold_override: dict = None,
     ) -> dict:
         strategies = {
-            # 基準線
-            "A_top1_all":           {"top_n": 1, "min_odds": 0,   "score_gap": 0,   "max_popularity": 99},
-            "D_top2_all":           {"top_n": 2, "min_odds": 0,   "score_gap": 0,   "max_popularity": 99},
-            # オッズフィルタ単体（D系）
-            "D_top2_odds2up":       {"top_n": 2, "min_odds": 2.0, "score_gap": 0,   "max_popularity": 99},
-            "D_top2_odds3up":       {"top_n": 2, "min_odds": 3.0, "score_gap": 0,   "max_popularity": 99},
-            "D_top2_odds4up":       {"top_n": 2, "min_odds": 4.0, "score_gap": 0,   "max_popularity": 99},
-            # スコアギャップフィルタ（D系）
-            "D_top2_gap1.3":        {"top_n": 2, "min_odds": 0,   "score_gap": 1.3, "max_popularity": 99},
-            "D_top2_gap1.5":        {"top_n": 2, "min_odds": 0,   "score_gap": 1.5, "max_popularity": 99},
-            # 組み合わせ（D系）
-            "D_top2_odds2_gap1.3":  {"top_n": 2, "min_odds": 2.0, "score_gap": 1.3, "max_popularity": 99},
-            "D_top2_odds2_gap1.5":  {"top_n": 2, "min_odds": 2.0, "score_gap": 1.5, "max_popularity": 99},
-            "D_top2_odds3_gap1.3":  {"top_n": 2, "min_odds": 3.0, "score_gap": 1.3, "max_popularity": 99},
-            # 人気上限フィルタ（1〜6番人気まで）
-            "D_top2_pop6":          {"top_n": 2, "min_odds": 0,   "score_gap": 0,   "max_popularity": 6},
-            "D_top2_odds2_pop6":    {"top_n": 2, "min_odds": 2.0, "score_gap": 0,   "max_popularity": 6},
-            # 参考：E戦略ベース
-            "E_top1_odds2_gap":     {"top_n": 1, "min_odds": 2.0, "score_gap": 1.5, "max_popularity": 99},
+            # 既存ベースライン
+            "D_top2_all":              {"top_n": 2, "min_odds": 0,   "score_gap": 0,   "max_popularity": 99},
+            "D_top2_gap1.5":           {"top_n": 2, "min_odds": 0,   "score_gap": 1.5, "max_popularity": 99},
+            "D_top2_odds2_pop6":       {"top_n": 2, "min_odds": 2.0, "score_gap": 0,   "max_popularity": 6},
+            # 人気幅を広げた組み合わせ
+            "D_top2_odds2_pop7":       {"top_n": 2, "min_odds": 2.0, "score_gap": 0,   "max_popularity": 7},
+            "D_top2_odds2_pop8":       {"top_n": 2, "min_odds": 2.0, "score_gap": 0,   "max_popularity": 8},
+            "D_top2_odds2_pop9":       {"top_n": 2, "min_odds": 2.0, "score_gap": 0,   "max_popularity": 9},
+            # gap + 人気フィルタ
+            "D_top2_gap1.3_pop8":      {"top_n": 2, "min_odds": 0,   "score_gap": 1.3, "max_popularity": 8},
+            "D_top2_gap1.5_pop8":      {"top_n": 2, "min_odds": 0,   "score_gap": 1.5, "max_popularity": 8},
+            "D_top2_gap2.0_pop8":      {"top_n": 2, "min_odds": 0,   "score_gap": 2.0, "max_popularity": 8},
+            # オッズ + gap + 人気の三重フィルタ
+            "D_top2_odds2_gap1.3_pop8":{"top_n": 2, "min_odds": 2.0, "score_gap": 1.3, "max_popularity": 8},
+            "D_top2_odds2_gap1.5_pop8":{"top_n": 2, "min_odds": 2.0, "score_gap": 1.5, "max_popularity": 8},
+            "D_top2_odds2_gap1.3_pop6":{"top_n": 2, "min_odds": 2.0, "score_gap": 1.3, "max_popularity": 6},
+            # オッズ下限を1.5倍に下げて的中率確保
+            "D_top2_odds1.5_pop8":     {"top_n": 2, "min_odds": 1.5, "score_gap": 0,   "max_popularity": 8},
+            "D_top2_odds1.5_gap1.5":   {"top_n": 2, "min_odds": 1.5, "score_gap": 1.5, "max_popularity": 99},
         }
 
         all_results = {}
