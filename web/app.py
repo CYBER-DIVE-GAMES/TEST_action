@@ -1302,11 +1302,9 @@ def api_predict_url():
         if date_m:
             info["date"] = f"{date_m.group(1)}-{int(date_m.group(2)):02d}-{int(date_m.group(3)):02d}"
 
-        name_m = re.match(r"(.+?)(?:\s*5走|\s*\|)", title_text)
+        name_m = re.match(r"(.+?)(?:\s*(?:出走表|出馬表)\s*|\s*5走|\s*\|)", title_text)
         if name_m:
-            raw_name = name_m.group(1).strip()
-            raw_name = re.sub(r'\s*(出走表|出馬表)\s*$', '', raw_name).strip()
-            info["race_name"] = raw_name
+            info["race_name"] = name_m.group(1).strip()
 
         # 距離・芝ダート
         race_data_div = soup.select_one(".RaceData01") or soup.select_one(".race_data")
