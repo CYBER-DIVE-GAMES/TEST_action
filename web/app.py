@@ -1468,12 +1468,20 @@ def api_predict_url():
         df_sorted = df.sort_values("horse_number").reset_index(drop=True)
         win_probs   = win_model.predict_proba(df_sorted)
         place_probs = place_model.predict_proba(df_sorted)
-        # オッズ系feature除外の純粋能力スコア（EV計算に使用）
-        ai_scores   = place_model.predict_proba(df_sorted, exclude_odds=True)
 
-        # AIスコアをレース内で正規化して0-100の相対スコアに変換
-        score_sum = ai_scores.sum()
-        ai_scores_norm = ai_scores / score_sum if score_sum > 0 else ai_scores
+        # オッズ系feature除外の純粋能力スコア
+        ai_raw = place_model.predict_proba(df_sorted, exclude_odds=True)
+
+        # レース内正規化 → 相対勝利確率（合計=1）
+        n_horses = len(df_sorted)
+        raw_sum = ai_raw.sum()
+        ai_win_prob = ai_raw / raw_sum if raw_sum > 0 else np.ones(n_horses) / n_horses
+
+        # 複勝確率 = 相対勝利確率 × 3（3着以内）、上限90%
+        ai_place_prob = np.clip(ai_win_prob * 3, 0, 0.90)
+
+        # 表示用スコア：平均=100点基準の相対指数
+        ai_score_pts = (ai_win_prob * 100 * n_horses).astype(int)  # 平均100点
 
         ev_calc = ExpectedValueCalculator(win_model, place_model)
         odds_dict = {
@@ -1481,18 +1489,19 @@ def api_predict_url():
             "fukusho":   {hn: v.get("place_odds_min", 0) for hn, v in (win_place_odds or {}).items() if v.get("place_odds_min")},
             "wide": {}, "umaren": {}, "sanrenpuku": {},
         }
-        # AIスコアベースのfukusho probabilityでEV計算
-        ai_score_map = {int(df_sorted.iloc[i]["horse_number"]): float(ai_scores[i])
-                        for i in range(len(df_sorted))}
+        # 正規化済み複勝確率でEV計算
+        ai_place_map = {int(df_sorted.iloc[i]["horse_number"]): float(ai_place_prob[i])
+                        for i in range(n_horses)}
         recs_df = ev_calc.recommend(df_sorted, odds_dict, budget=10000,
-                                    place_prob_override=ai_score_map)
+                                    place_prob_override=ai_place_map)
 
         horses_out = []
         for i, row in df_sorted.iterrows():
             hn = int(row["horse_number"] or 0)
             wp = float(win_probs[i])
             pp = float(place_probs[i])
-            ai_s = float(ai_scores[i])
+            ap = float(ai_place_prob[i])
+            pts = int(ai_score_pts[i])
             fukusho_odds = odds_dict["fukusho"].get(hn, 0)
             tan_odds     = odds_dict["tan"].get(hn, 0)
             wo = float(row["win_odds"] or 0)
@@ -1508,10 +1517,10 @@ def api_predict_url():
                 "weight": 0, "weight_diff": 0,
                 "win_prob":   round(wp, 3),
                 "place_prob": round(pp, 3),
-                "ai_score":   round(ai_s, 4),
-                "place_ev":   round(ai_s * fukusho_odds, 3) if fukusho_odds else None,
+                "ai_score":   pts,
+                "place_ev":   round(ap * fukusho_odds, 3) if fukusho_odds else None,
                 "win_ev":     round(wp * tan_odds, 3) if tan_odds else None,
-                "score":      int(min(99, max(1, ai_s * 200))),
+                "score":      pts,
                 "finish_order": None,
             })
 

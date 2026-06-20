@@ -77,8 +77,9 @@ class ExpectedValueCalculator:
                 min_odds = horse_odds if isinstance(horse_odds, float) else horse_odds.get("place_odds_min", 1.0)
                 ev = p * min_odds
 
-                # 条件：AIスコア（複勝確率）× オッズ = 期待値 ≥ 1.10 かつ 複勝確率≥40%
-                if ev >= self.ev_threshold["fukusho"] and p >= 0.40:
+                # 条件：正規化複勝確率 × オッズ = EV ≥ 1.10
+                # 正規化後の確率は相対値なので絶対閾値は設けない
+                if ev >= self.ev_threshold["fukusho"]:
                     stake = self._kelly_stake(p, min_odds, budget)
                     candidates.append({
                         "bet_type": "複勝",
