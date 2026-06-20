@@ -5,6 +5,7 @@ import sys
 import sqlite3
 import threading
 import logging
+import numpy as np
 from datetime import date
 from pathlib import Path
 from flask import Flask, render_template, jsonify, request
