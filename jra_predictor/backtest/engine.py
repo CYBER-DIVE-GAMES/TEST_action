@@ -34,7 +34,10 @@ class BacktestEngine:
         cutoff = df["date"].max() - pd.DateOffset(years=test_years)
         df_test = df[df["date"] >= cutoff].copy()
 
-        logger.info(f"Test期間: {df_test['date'].min().date()} - {df_test['date'].max().date()} ({len(df_test)}行)")
+        print(f"[INFO] 最大日付: {df['date'].max().date()}")
+        print(f"[INFO] カットオフ: {cutoff.date()}")
+        print(f"[INFO] テスト期間: {df_test['date'].min().date()} 〜 {df_test['date'].max().date()} ({len(df_test)}行)")
+        print(f"[INFO] テストレース数: {df_test['race_id'].nunique()}")
 
         # 学習済みモデルをロード（再学習しない）
         win_model   = RacePredictor("is_win")
