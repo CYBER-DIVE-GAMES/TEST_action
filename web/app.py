@@ -317,12 +317,22 @@ def api_race(race_id: str):
         for col in ["win_rate_3","win_rate_5","win_rate_10","place_rate_3","place_rate_5","place_rate_10",
                     "avg_popularity_3","avg_popularity_5","avg_odds_5",
                     "prev_finish","prev2_finish","avg_last3f_5","days_since_last","career_runs",
-                    "horse_course_wins","horse_course_place","horse_surface_wins"]:
+                    "horse_course_wins","horse_course_place","horse_surface_wins",
+                    "horse_condition_wins","avg_running_style",
+                    "sire_win_rate","sire_place_rate","sire_dist_win_rate"]:
             df[col] = df["horse_id"].map(lambda hid: horse_hist.get(hid, {}).get(col, float("nan"))) \
                 if "horse_id" in df.columns else float("nan")
         df["odds_change"] = df.apply(
             lambda row: (row["win_odds"] - horse_hist.get(row.get("horse_id",""), {}).get("_prev_odds", float("nan")))
             if horse_hist.get(row.get("horse_id",""), {}).get("_prev_odds") is not None else float("nan"), axis=1
+        )
+        # 馬体重トレンド
+        df["avg_weight_3"] = df["horse_id"].map(
+            lambda hid: horse_hist.get(hid, {}).get("_avg_weight_3", float("nan"))
+        ) if "horse_id" in df.columns else float("nan")
+        df["weight_vs_avg"] = df.apply(
+            lambda row: float(row["horse_weight"]) - row["avg_weight_3"]
+            if pd.notna(row.get("horse_weight")) and pd.notna(row.get("avg_weight_3")) else float("nan"), axis=1
         )
         for col in ["jockey_win_rate_30","jockey_win_rate_100","jockey_place_rate_30",
                     "jockey_place_rate_100","jockey_course_wins","jockey_dist_wins"]:
@@ -957,6 +967,34 @@ def _fetch_history_features(horse_ids: list, jockey_ids: list, trainer_ids: list
             surf_rows = [r for r in rows if r["surface"] == surface]
             feats["horse_surface_wins"] = float(np.mean([r["is_win"] or 0 for r in surf_rows])) if surf_rows else np.nan
 
+            # 馬場状態別（良・稍重・重・不良）勝率
+            cond_rows_map = {}
+            for r in rows:
+                tc = r["track_condition"] if r["track_condition"] else None
+                if tc:
+                    cond_rows_map.setdefault(tc, []).append(r)
+            # 全馬場状態の平均（当日の馬場状態が予測時点で不明のため全体平均）
+            all_cond = [r for r in rows if r["track_condition"]]
+            feats["horse_condition_wins"] = float(np.mean([r["is_win"] or 0 for r in all_cond])) if all_cond else np.nan
+
+            # 脚質（passing_orderから推定）
+            def _est_style(passing):
+                if not passing:
+                    return np.nan
+                positions = [int(x) for x in str(passing).split("-") if x.strip().isdigit()]
+                if not positions:
+                    return np.nan
+                avg_pos = np.mean(positions)
+                return 1 if avg_pos <= 3 else (2 if avg_pos <= 6 else 3)
+
+            styles = [_est_style(r["passing_order"]) for r in rows if r["passing_order"]]
+            styles = [s for s in styles if not np.isnan(s)]
+            feats["avg_running_style"] = float(np.mean(styles[:5])) if styles else np.nan
+
+            # 馬体重トレンド（直近3走平均との差は予測時点では体重未確定のためavg_weight_3のみ保存）
+            weights = [r["horse_weight"] for r in rows if r["horse_weight"]]
+            feats["_avg_weight_3"] = float(np.mean(weights[:3])) if weights else np.nan
+
         # ---- 騎手の過去成績 ----
         jockey_feats = {}
         for jid in set(jockey_ids):
@@ -1014,13 +1052,58 @@ def _fetch_history_features(horse_ids: list, jockey_ids: list, trainer_ids: list
                 "trainer_place_rate_50": float(np.mean(ipl[:50])) if len(ipl) >= 5 else np.nan,
             }
 
+        # ---- 血統（父別成績）----
+        sire_feats = {}
+        # horse_profileから父名を取得
+        placeholders = ",".join("?" * len(horse_ids))
+        if horse_ids:
+            profile_rows = conn.execute(
+                f"SELECT horse_id, sire FROM horse_profile WHERE horse_id IN ({placeholders})",
+                horse_ids
+            ).fetchall() if placeholders else []
+
+            # 父名 → horse_idリスト
+            sire_map = {}  # horse_id -> sire
+            for pr in profile_rows:
+                if pr["sire"]:
+                    sire_map[pr["horse_id"]] = pr["sire"]
+
+            # 父別の全成績を集計
+            sires = list(set(sire_map.values()))
+            for sire in sires:
+                sire_rows = conn.execute(
+                    """SELECT r.is_win, r.is_place, r.distance
+                       FROM race_results r
+                       JOIN horse_profile p ON r.horse_id = p.horse_id
+                       WHERE p.sire=? AND r.date < ?
+                       ORDER BY r.date DESC LIMIT 500""",
+                    (sire, race_date)
+                ).fetchall()
+                if len(sire_rows) < 10:
+                    continue
+                iw  = [r["is_win"]   or 0 for r in sire_rows]
+                ipl = [r["is_place"] or 0 for r in sire_rows]
+                dist_cat = "sprint" if distance <= 1400 else ("mile" if distance <= 1800 else ("middle" if distance <= 2200 else "long"))
+                dist_ranges = {"sprint":(0,1400),"mile":(1401,1800),"middle":(1801,2200),"long":(2201,9999)}
+                lo, hi = dist_ranges[dist_cat]
+                dist_rows_iw = [r["is_win"] or 0 for r in sire_rows if r["distance"] and lo <= r["distance"] <= hi]
+                sire_feats[sire] = {
+                    "sire_win_rate":      float(np.mean(iw)),
+                    "sire_place_rate":    float(np.mean(ipl)),
+                    "sire_dist_win_rate": float(np.mean(dist_rows_iw)) if dist_rows_iw else np.nan,
+                }
+
+            # 馬ごとに血統特徴量をセット
+            for horse_id in horse_ids:
+                sire = sire_map.get(horse_id)
+                if sire and sire in sire_feats:
+                    result[horse_id].update(sire_feats[sire])
+
     except Exception as e:
         logger.warning(f"_fetch_history_features error: {e}")
     finally:
         conn.close()
 
-    # 騎手・調教師特徴量を horse_id → jockey_id のマッピングで合成
-    # （呼び出し側でマージする）
     return {"horse": result, "jockey": jockey_feats, "trainer": trainer_feats}
 
 
@@ -1220,13 +1303,24 @@ def api_predict_url():
         for col in ["win_rate_3","win_rate_5","win_rate_10","place_rate_3","place_rate_5","place_rate_10",
                     "avg_popularity_3","avg_popularity_5","avg_odds_5",
                     "prev_finish","prev2_finish","avg_last3f_5","days_since_last","career_runs",
-                    "horse_course_wins","horse_course_place","horse_surface_wins"]:
+                    "horse_course_wins","horse_course_place","horse_surface_wins",
+                    "horse_condition_wins","avg_running_style",
+                    "sire_win_rate","sire_place_rate","sire_dist_win_rate"]:
             df[col] = df["horse_id"].map(lambda hid: horse_hist.get(hid, {}).get(col, float("nan")))
 
         # odds_change = 今のオッズ - 前走オッズ
         df["odds_change"] = df.apply(
             lambda row: (row["win_odds"] - horse_hist.get(row["horse_id"], {}).get("_prev_odds", float("nan")))
             if horse_hist.get(row["horse_id"], {}).get("_prev_odds") is not None else float("nan"), axis=1
+        )
+
+        # 馬体重トレンド
+        df["avg_weight_3"] = df["horse_id"].map(
+            lambda hid: horse_hist.get(hid, {}).get("_avg_weight_3", float("nan"))
+        )
+        df["weight_vs_avg"] = df.apply(
+            lambda row: float(row["horse_weight"]) - row["avg_weight_3"]
+            if pd.notna(row.get("horse_weight")) and pd.notna(row.get("avg_weight_3")) else float("nan"), axis=1
         )
 
         # 騎手特徴量
@@ -1240,10 +1334,8 @@ def api_predict_url():
             df[col] = df["trainer_id"].map(lambda tid: trainer_hist.get(tid, {}).get(col, float("nan"))) \
                 if "trainer_id" in df.columns else float("nan")
 
-        # 残りのHIST_COLSはNaN
-        HIST_COLS = ["horse_dist_wins","horse_condition_wins","avg_running_style",
-                     "sire_win_rate","sire_place_rate","sire_dist_win_rate","avg_weight_3","weight_vs_avg"]
-        for col in HIST_COLS:
+        # 残りNaN埋め
+        for col in ["horse_dist_wins"]:
             if col not in df.columns:
                 df[col] = float("nan")
 
