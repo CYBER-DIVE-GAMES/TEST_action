@@ -76,18 +76,7 @@ class BacktestEngine:
         ev_threshold_override: dict = None,
     ) -> dict:
         strategies = {
-            # ベースライン
-            "D_top2_gap2.0_pop8":      {"top_n": 2, "min_odds": 0,   "score_gap": 2.0, "max_popularity": 8},
-            # pop8を外す
-            "D_top2_gap2.0_all":       {"top_n": 2, "min_odds": 0,   "score_gap": 2.0, "max_popularity": 99},
-            # gap周辺を細かく
-            "D_top2_gap1.7_all":       {"top_n": 2, "min_odds": 0,   "score_gap": 1.7, "max_popularity": 99},
-            "D_top2_gap1.8_all":       {"top_n": 2, "min_odds": 0,   "score_gap": 1.8, "max_popularity": 99},
-            "D_top2_gap1.9_all":       {"top_n": 2, "min_odds": 0,   "score_gap": 1.9, "max_popularity": 99},
-            "D_top2_gap2.5_all":       {"top_n": 2, "min_odds": 0,   "score_gap": 2.5, "max_popularity": 99},
-            # pop外し + オッズ下限
-            "D_top2_gap2.0_odds1.5":   {"top_n": 2, "min_odds": 1.5, "score_gap": 2.0, "max_popularity": 99},
-            "D_top2_gap1.8_odds1.5":   {"top_n": 2, "min_odds": 1.5, "score_gap": 1.8, "max_popularity": 99},
+            "D_top2_gap2.0_pop8": {"top_n": 2, "min_odds": 0, "score_gap": 2.0, "max_popularity": 8},
         }
 
         all_results = {}
@@ -162,14 +151,16 @@ class BacktestEngine:
     @staticmethod
     def _print_strategy_report(all_results: dict, strategies: dict):
         print("\n" + "="*75)
-        print("戦略比較バックテスト（複勝・AIスコアベース）")
-        print(f"{'戦略':<22} {'ベット':>7} {'的中率':>7} {'回収率':>7} {'収支':>12} {'平均オッズ':>10}")
-        print("-"*75)
+        print("バックテスト結果：D_top2_gap2.0_pop8")
+        print("="*75)
         for name, records in all_results.items():
             if not records:
-                print(f"  {name:<20} データなし")
+                print("データなし")
                 continue
             df = pd.DataFrame(records)
+            df["year"] = df["race_id"].str[:4]
+
+            # 総合
             n = len(df)
             hits = df["hit"].sum()
             stake_total = df["stake"].sum()
@@ -177,8 +168,28 @@ class BacktestEngine:
             avg_odds = df["fukusho_odds"].mean()
             roi = pay_total / stake_total * 100 if stake_total > 0 else 0
             profit = pay_total - stake_total
-            print(f"  {name:<20} {n:>7,} {hits/n*100:>6.1f}% {roi:>6.1f}% ¥{profit:>+10,} {avg_odds:>9.2f}倍")
-        print("="*75)
+            print(f"\n【総合】")
+            print(f"  ベット数:  {n:,}回  /  的中: {int(hits):,}回  ({hits/n*100:.1f}%)")
+            print(f"  平均オッズ: {avg_odds:.2f}倍")
+            print(f"  投資合計:  ¥{int(stake_total):,}")
+            print(f"  回収合計:  ¥{int(pay_total):,}")
+            print(f"  回収率:    {roi:.1f}%")
+            print(f"  収支:      ¥{int(profit):+,}")
+
+            # 年別
+            print(f"\n【年別内訳】")
+            print(f"  {'年':>4} {'ベット':>7} {'的中率':>7} {'回収率':>7} {'収支':>12} {'平均オッズ':>10}")
+            print(f"  " + "-"*55)
+            for year, grp in df.groupby("year"):
+                yn = len(grp)
+                yh = grp["hit"].sum()
+                ys = grp["stake"].sum()
+                yp = grp["payout"].sum()
+                yo = grp["fukusho_odds"].mean()
+                yroi = yp / ys * 100 if ys > 0 else 0
+                yprofit = yp - ys
+                print(f"  {year:>4} {yn:>7,} {yh/yn*100:>6.1f}% {yroi:>6.1f}% ¥{int(yprofit):>+10,} {yo:>9.2f}倍")
+        print("\n" + "="*75)
 
     def _simulate(
         self,

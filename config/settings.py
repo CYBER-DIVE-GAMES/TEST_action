@@ -26,7 +26,7 @@ DB_URL = f"sqlite:///{DB_PATH}"
 # モデル設定
 RANDOM_SEED = 42
 CV_FOLDS = 5
-TEST_YEARS = 2               # バックテスト用直近N年
+TEST_YEARS = 10              # バックテスト用直近N年
 
 # 馬券種別設定
 BET_TYPES = ["fukusho", "wide", "umaren", "sanrenpuku"]
