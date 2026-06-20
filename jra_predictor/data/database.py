@@ -223,6 +223,13 @@ class Database:
                     "race_id": race_id, "bet_type": bet_type,
                     "combo": combo_str, "odds": odds
                 })
+            # tanshoの場合はrace_results.win_oddsも更新
+            if bet_type == "tansho":
+                for combo, odds in odds_dict.items():
+                    conn.execute(text("""
+                        UPDATE race_results SET win_odds = :odds
+                        WHERE race_id = :race_id AND horse_number = :num
+                    """), {"race_id": race_id, "num": int(combo), "odds": float(odds)})
             conn.commit()
 
     def read_table(self, table: str, where: str = "") -> pd.DataFrame:
