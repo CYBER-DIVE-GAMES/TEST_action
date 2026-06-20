@@ -15,18 +15,37 @@ from jra_predictor.data import Database
 
 db = Database()
 
-FIELDS = ["date", "course", "course_code", "race_number",
-          "race_name", "distance", "surface", "weather", "track_condition"]
-
 print("race_infoからrace_resultsへフィールドを補完中...")
 
+# race_infoから補完できるフィールド
+RACE_INFO_FIELDS = ["date", "course", "course_code", "race_number",
+                    "race_name", "distance", "surface", "weather", "track_condition"]
+
 with db.engine.connect() as conn:
-    for field in FIELDS:
+    for field in RACE_INFO_FIELDS:
         result = conn.execute(text(f"""
             UPDATE race_results
             SET {field} = (
                 SELECT {field} FROM race_info
                 WHERE race_info.race_id = race_results.race_id
+            )
+            WHERE (race_results.{field} IS NULL OR race_results.{field} = '')
+              AND substr(race_results.race_id, 1, 4) >= '2022'
+        """))
+        conn.commit()
+        print(f"  {field}: {result.rowcount}行更新")
+
+# race_infoにdistance/surfaceがない場合はhorse_historyから補完
+print("\nhorse_historyからdistance/surfaceを補完中...")
+with db.engine.connect() as conn:
+    for field in ["distance", "surface"]:
+        result = conn.execute(text(f"""
+            UPDATE race_results
+            SET {field} = (
+                SELECT {field} FROM horse_history
+                WHERE horse_history.race_id = race_results.race_id
+                  AND horse_history.{field} IS NOT NULL
+                LIMIT 1
             )
             WHERE (race_results.{field} IS NULL OR race_results.{field} = '')
               AND substr(race_results.race_id, 1, 4) >= '2022'
