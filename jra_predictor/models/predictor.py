@@ -38,6 +38,10 @@ FEATURE_COLS = [
     "weight_vs_avg", "horse_weight",
     "popularity_norm", "relative_odds", "fav_odds",
     "distance",
+    "race_class", "prev_race_class", "class_change", "class_finish_index",
+    "place_base_rate", "is_shinsoba",
+    "distance_change", "surface_change", "course_change",
+    "n_frontrunners", "pace_pressure",
 ]
 
 

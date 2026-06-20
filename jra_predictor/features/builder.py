@@ -73,6 +73,8 @@ class FeatureBuilder:
         df = self._add_pedigree_features(df)
         df = self._add_weight_features(df)
         df = self._add_odds_features(df)
+        df = self._add_class_features(df)
+        df = self._add_change_features(df)
 
         # object型の数値列を強制変換（LightGBMはobjectを受け付けない）
         # 文字列列（horse_name等）はto_numericでNaNになるが特徴量には使わないため問題なし
@@ -279,6 +281,95 @@ class FeatureBuilder:
         df["weight_handicap"] = df.groupby("race_id")["weight_carried"].transform(
             lambda x: x - x.mean()
         )
+
+        return df
+
+    def _add_class_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """レースクラス・頭数補正特徴量"""
+        # レース名からクラスを数値化
+        def race_class(name):
+            if not isinstance(name, str):
+                return 5
+            if any(k in name for k in ["GI", "G1", "有馬", "天皇賞", "ジャパン", "宝塚", "安田"]):
+                return 1
+            if any(k in name for k in ["GII", "G2"]):
+                return 2
+            if any(k in name for k in ["GIII", "G3"]):
+                return 3
+            if any(k in name for k in ["(L)", "リステッド"]):
+                return 4
+            if "OP" in name or "オープン" in name:
+                return 5
+            if "3勝" in name or "1600万" in name:
+                return 6
+            if "2勝" in name or "1000万" in name:
+                return 7
+            if "1勝" in name or "500万" in name:
+                return 8
+            if "未勝利" in name:
+                return 9
+            if "新馬" in name or "メイクデビュー" in name:
+                return 10
+            return 5
+
+        df["race_class"] = df["race_name"].apply(race_class)
+
+        # 前走クラス
+        df["prev_race_class"] = df.groupby("horse_id")["race_class"].shift(1)
+
+        # クラス変化（正=昇級, 負=降級）
+        df["class_change"] = df["prev_race_class"] - df["race_class"]
+
+        # 前走クラス × 前走着順の複合指標（降級+好走 = 狙い目）
+        df["class_finish_index"] = df.apply(
+            lambda r: r["class_change"] * (6 - min(r["prev_finish"], 6))
+            if pd.notna(r.get("class_change")) and pd.notna(r.get("prev_finish")) else float("nan"), axis=1
+        )
+
+        # 頭数補正：複勝基準確率（3/出走頭数）
+        df["place_base_rate"] = 3.0 / df["field_count"].clip(lower=4)
+
+        # 市場複勝確率（人気から逆算: 1/odds のスケール）
+        # モデル確率との乖離を後で計算するための基準値
+        df["is_shinsoba"] = df["race_name"].apply(
+            lambda n: 1 if isinstance(n, str) and ("新馬" in n or "メイクデビュー" in n) else 0
+        )
+
+        return df
+
+    def _add_change_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """前走からの変化特徴量"""
+        df = df.sort_values(["horse_id", "date", "race_id"], na_position="last")
+
+        # 前走距離
+        df["prev_distance"] = df.groupby("horse_id")["distance"].shift(1)
+        # 距離変化（正=距離延長, 負=距離短縮）
+        df["distance_change"] = pd.to_numeric(df["distance"], errors="coerce") - pd.to_numeric(df["prev_distance"], errors="coerce")
+
+        # 前走芝ダート
+        df["prev_surface"] = df.groupby("horse_id")["surface"].shift(1)
+        # 芝ダート変更フラグ（0=変更なし, 1=変更あり）
+        df["surface_change"] = (df["surface"] != df["prev_surface"]).astype(float)
+        df.loc[df["prev_surface"].isna(), "surface_change"] = float("nan")
+
+        # 前走コース
+        df["prev_course_code"] = df.groupby("horse_id")["course_code"].shift(1)
+        # コース変更フラグ
+        df["course_change"] = (df["course_code"] != df["prev_course_code"]).astype(float)
+        df.loc[df["prev_course_code"].isna(), "course_change"] = float("nan")
+
+        # ペース想定：同レース内の先行馬（running_style==1）の数
+        if "running_style" in df.columns:
+            df["n_frontrunners"] = df.groupby("race_id")["running_style"].transform(
+                lambda x: (x == 1).sum()
+            )
+            # 自分が先行馬かつ前走者が多い = 厳しい展開
+            df["pace_pressure"] = df.apply(
+                lambda r: r["n_frontrunners"] - 1 if r.get("running_style") == 1 else 0, axis=1
+            )
+        else:
+            df["n_frontrunners"] = float("nan")
+            df["pace_pressure"] = float("nan")
 
         return df
 

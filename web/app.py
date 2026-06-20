@@ -342,6 +342,28 @@ def api_race(race_id: str):
             df[col] = df["trainer_id"].map(lambda tid: trainer_hist.get(tid, {}).get(col, float("nan"))) \
                 if "trainer_id" in df.columns else float("nan")
 
+        # クラス・変化系特徴量を追加
+        race_name_val = str(df["race_name"].iloc[0]) if "race_name" in df.columns and len(df) else ""
+        dist_val_int = int(float(df["distance"].iloc[0])) if "distance" in df.columns and len(df) else 1600
+        df = _add_prediction_class_features(df, race_name_val, dist_val_int)
+        # 前走クラス・距離変化・馬場変化をhorse_histから補完
+        df["prev_race_class"] = df["horse_id"].map(
+            lambda hid: horse_hist.get(hid, {}).get("prev_race_class", float("nan"))
+        ) if "horse_id" in df.columns else float("nan")
+        df["class_change"] = df["race_class"] - df["prev_race_class"]
+        df["class_finish_index"] = df.apply(
+            lambda r: r["class_change"] * (6 - min(r.get("prev_finish", 6) or 6, 6))
+            if pd.notna(r.get("class_change")) and pd.notna(r.get("prev_finish")) else float("nan"), axis=1
+        )
+        df["distance_change"] = df["horse_id"].map(
+            lambda hid: (dist_val_int - horse_hist.get(hid, {}).get("_prev_distance", float("nan")))
+            if pd.notna(horse_hist.get(hid, {}).get("_prev_distance")) else float("nan")
+        ) if "horse_id" in df.columns else float("nan")
+        df["surface_change"] = df["horse_id"].map(
+            lambda hid: (0 if horse_hist.get(hid, {}).get("_prev_surface") == surface_h else 1)
+            if horse_hist.get(hid, {}).get("_prev_surface") else float("nan")
+        ) if "horse_id" in df.columns else float("nan")
+
         NON_NUMERIC = {"race_id","horse_name","horse_id","jockey_name","jockey_id","trainer_name",
                        "race_name","course","course_code","surface","track_condition","sex_age","sex",
                        "margin","passing_order","distance_cat","date"}
@@ -886,6 +908,50 @@ def api_actual_stats():
 
 
 
+def _add_prediction_class_features(df, race_name: str, distance: int):
+    """予測時のクラス・変化系特徴量を追加（_fetch_history_featuresの補完）"""
+    import re
+
+    def _race_class(name):
+        if not isinstance(name, str):
+            return 5
+        if any(k in name for k in ["GI","G1","有馬","天皇賞","ジャパン","宝塚","安田"]):
+            return 1
+        if any(k in name for k in ["GII","G2"]):
+            return 2
+        if any(k in name for k in ["GIII","G3"]):
+            return 3
+        if "(L)" in name or "リステッド" in name:
+            return 4
+        if "OP" in name or "オープン" in name:
+            return 5
+        if "3勝" in name or "1600万" in name:
+            return 6
+        if "2勝" in name or "1000万" in name:
+            return 7
+        if "1勝" in name or "500万" in name:
+            return 8
+        if "未勝利" in name:
+            return 9
+        if "新馬" in name or "メイクデビュー" in name:
+            return 10
+        return 5
+
+    df["race_class"]     = _race_class(race_name)
+    df["is_shinsoba"]    = 1 if isinstance(race_name, str) and ("新馬" in race_name or "メイクデビュー" in race_name) else 0
+    df["place_base_rate"] = 3.0 / df["field_count"].clip(lower=4)
+
+    # 前走クラス・距離・馬場はDBから取得済みの_prev系を使う
+    # （_fetch_history_featuresで_prev_race_class等を取得していないためNaN）
+    for col in ["prev_race_class","class_change","class_finish_index",
+                "distance_change","surface_change","course_change",
+                "n_frontrunners","pace_pressure"]:
+        if col not in df.columns:
+            df[col] = float("nan")
+
+    return df
+
+
 def _fetch_history_features(horse_ids: list, jockey_ids: list, trainer_ids: list,
                              race_date: str, course_code: str, surface: str, distance: int) -> dict:
     """DBから馬・騎手・調教師の過去成績を取得して特徴量dictを返す
@@ -909,7 +975,9 @@ def _fetch_history_features(horse_ids: list, jockey_ids: list, trainer_ids: list
                 continue
             rows = conn.execute(
                 """SELECT finish_order, win_odds, popularity, last_3f, date,
-                          course_code, surface, is_win, is_place
+                          course_code, surface, is_win, is_place,
+                          distance, track_condition, passing_order, horse_weight,
+                          race_name
                    FROM race_results
                    WHERE horse_id=? AND date < ?
                    ORDER BY date DESC LIMIT 15""",
@@ -991,9 +1059,31 @@ def _fetch_history_features(horse_ids: list, jockey_ids: list, trainer_ids: list
             styles = [s for s in styles if not np.isnan(s)]
             feats["avg_running_style"] = float(np.mean(styles[:5])) if styles else np.nan
 
-            # 馬体重トレンド（直近3走平均との差は予測時点では体重未確定のためavg_weight_3のみ保存）
+            # 馬体重トレンド
             weights = [r["horse_weight"] for r in rows if r["horse_weight"]]
             feats["_avg_weight_3"] = float(np.mean(weights[:3])) if weights else np.nan
+
+            # 前走クラス・距離・馬場変化
+            def _race_class_from_name(name):
+                if not isinstance(name, str): return 5
+                if any(k in name for k in ["GI","G1","有馬","天皇賞","宝塚","安田"]): return 1
+                if any(k in name for k in ["GII","G2"]): return 2
+                if any(k in name for k in ["GIII","G3"]): return 3
+                if "(L)" in name or "リステッド" in name: return 4
+                if "OP" in name or "オープン" in name: return 5
+                if "3勝" in name: return 6
+                if "2勝" in name: return 7
+                if "1勝" in name: return 8
+                if "未勝利" in name: return 9
+                if "新馬" in name or "メイクデビュー" in name: return 10
+                return 5
+
+            if rows:
+                prev = rows[0]
+                prev_cls = _race_class_from_name(prev["race_name"]) if prev["race_name"] else 5
+                feats["prev_race_class"] = float(prev_cls)
+                feats["_prev_distance"]  = float(prev["distance"]) if prev["distance"] else np.nan
+                feats["_prev_surface"]   = prev["surface"] if prev["surface"] else None
 
         # ---- 騎手の過去成績 ----
         jockey_feats = {}
@@ -1334,8 +1424,26 @@ def api_predict_url():
             df[col] = df["trainer_id"].map(lambda tid: trainer_hist.get(tid, {}).get(col, float("nan"))) \
                 if "trainer_id" in df.columns else float("nan")
 
-        # 残りNaN埋め
-        for col in ["horse_dist_wins"]:
+        # クラス・変化系特徴量
+        df = _add_prediction_class_features(df, info.get("race_name",""), dist_val)
+        df["prev_race_class"] = df["horse_id"].map(
+            lambda hid: horse_hist.get(hid, {}).get("prev_race_class", float("nan"))
+        )
+        df["class_change"] = df["race_class"] - df["prev_race_class"]
+        df["class_finish_index"] = df.apply(
+            lambda r: r["class_change"] * (6 - min(r.get("prev_finish", 6) or 6, 6))
+            if pd.notna(r.get("class_change")) and pd.notna(r.get("prev_finish")) else float("nan"), axis=1
+        )
+        surf_val = info.get("surface","")
+        df["distance_change"] = df["horse_id"].map(
+            lambda hid: (dist_val - horse_hist.get(hid, {}).get("_prev_distance", float("nan")))
+            if pd.notna(horse_hist.get(hid, {}).get("_prev_distance")) else float("nan")
+        )
+        df["surface_change"] = df["horse_id"].map(
+            lambda hid: (0 if horse_hist.get(hid, {}).get("_prev_surface") == surf_val else 1)
+            if horse_hist.get(hid, {}).get("_prev_surface") else float("nan")
+        )
+        for col in ["horse_dist_wins","n_frontrunners","pace_pressure","course_change"]:
             if col not in df.columns:
                 df[col] = float("nan")
 
