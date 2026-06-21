@@ -264,7 +264,21 @@ class RaceResultScraper(BaseScaper):
     def fetch_odds(self, race_id: str) -> dict:
         """単勝・複勝・馬連・ワイド・3連複オッズを取得"""
         odds = {}
-        odds["tansho"] = self._fetch_win_place_odds(race_id)
+        win_place = self._fetch_win_place_odds(race_id)
+        # win_place = {馬番: {"win_odds": x, "place_odds_min": y, "place_odds_max": z}}
+        # tansho/fukushoに分割して保存形式に合わせる
+        tansho = {}
+        fukusho = {}
+        for num, d in win_place.items():
+            if d.get("win_odds"):
+                tansho[num] = d["win_odds"]
+            if d.get("place_odds_min"):
+                # 複勝は幅があるので中央値を使用
+                lo = d.get("place_odds_min", 0)
+                hi = d.get("place_odds_max", lo)
+                fukusho[num] = round((lo + hi) / 2, 1)
+        odds["tansho"] = tansho
+        odds["fukusho"] = fukusho
         odds["umaren"] = self._fetch_quinella_odds(race_id)
         odds["wide"] = self._fetch_wide_odds(race_id)
         odds["sanrenpuku"] = self._fetch_trio_odds(race_id)
