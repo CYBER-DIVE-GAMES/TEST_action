@@ -32,21 +32,16 @@ class BacktestEngine:
 
         df["date"] = pd.to_datetime(df["date"])
 
-        # 2022年以降はスクレイピングデータ（特徴量品質が異なる）
-        # Kaggleデータ期間内（〜2021年末）のみでバックテスト
-        KAGGLE_END = pd.Timestamp("2021-12-31")
-        df_kaggle = df[df["date"] <= KAGGLE_END].copy()
+        cutoff = df["date"].max() - pd.DateOffset(years=test_years)
+        df_test = df[df["date"] >= cutoff].copy()
 
-        cutoff = df_kaggle["date"].max() - pd.DateOffset(years=test_years)
-        df_test = df_kaggle[df_kaggle["date"] >= cutoff].copy()
-
-        print(f"[INFO] Kaggleデータ最大日付: {df_kaggle['date'].max().date()}")
+        print(f"[INFO] 最大日付: {df['date'].max().date()}")
         print(f"[INFO] カットオフ: {cutoff.date()}")
         print(f"[INFO] テスト期間: {df_test['date'].min().date()} 〜 {df_test['date'].max().date()} ({len(df_test)}行)")
         print(f"[INFO] テストレース数: {df_test['race_id'].nunique()}")
 
-        # テスト期間より前のKaggleデータで学習（時系列リーク防止）
-        df_train = df_kaggle[df_kaggle["date"] < cutoff].copy()
+        # テスト期間より前のデータで学習（時系列リーク防止）
+        df_train = df[df["date"] < cutoff].copy()
         print(f"[INFO] 学習データ: {df_train['date'].min().date()} 〜 {df_train['date'].max().date()} ({len(df_train)}行)")
 
         win_model   = RacePredictor("is_win")
