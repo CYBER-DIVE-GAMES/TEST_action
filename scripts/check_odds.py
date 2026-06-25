@@ -1,0 +1,13 @@
+import sqlite3
+conn = sqlite3.connect('data/jra.db')
+cur = conn.cursor()
+r1 = cur.execute("SELECT COUNT(*) FROM odds_raw WHERE bet_type='fukusho' AND substr(race_id,1,4) >= '2022'").fetchone()
+r2 = cur.execute("SELECT COUNT(*) FROM odds_raw WHERE bet_type='tansho' AND substr(race_id,1,4) >= '2022'").fetchone()
+r3 = cur.execute("SELECT COUNT(DISTINCT race_id) FROM race_results WHERE substr(race_id,1,4) >= '2022'").fetchone()
+r4 = cur.execute("SELECT COUNT(*) FROM race_results WHERE substr(race_id,1,4) >= '2022' AND popularity IS NOT NULL AND popularity > 0").fetchone()
+r5 = cur.execute("SELECT COUNT(*) FROM race_results WHERE substr(race_id,1,4) >= '2022'").fetchone()
+print('2022+レース数:', r3[0])
+print('2022+ tanshoオッズ件数:', r2[0])
+print('2022+ fukushoオッズ件数:', r1[0])
+print('2022+ popularity有効行:', r4[0], '/', r5[0])
+conn.close()
