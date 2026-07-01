@@ -91,6 +91,8 @@ def cmd_backtest(args):
                     d = r[bt]
                     print(f"  {bt} EV>{th:.2f}  {d['n_bets']:>8,}  {d['hit_rate']:>7.1f}%  {d['roi']:>7.1f}%  ¥{d['profit']:>+,}")
         print("="*70)
+    elif args.sweep2022:
+        engine.run_strategy_sweep()
     else:
         engine.run(
             test_years=args.years,
@@ -387,6 +389,7 @@ def main():
     p_bt.add_argument("--years", type=int, default=TEST_YEARS, help="テスト期間（年）")
     p_bt.add_argument("--budget", type=float, default=10000, help="1レースあたりの予算（円）")
     p_bt.add_argument("--sweep", action="store_true", help="EV閾値を段階的に変えて比較")
+    p_bt.add_argument("--sweep2022", action="store_true", help="2022-2024実オッズでパラメータスイープ")
 
     # list-races
     p_list = sub.add_parser("list-races", help="今日のレースID一覧を表示")

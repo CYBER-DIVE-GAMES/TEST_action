@@ -58,6 +58,104 @@ class BacktestEngine:
         )
         return report
 
+    def run_strategy_sweep(
+        self,
+        test_years: int = TEST_YEARS,
+    ) -> None:
+        """2022-2024の実オッズデータでパラメータスイープ"""
+        builder = FeatureBuilder(self.db)
+        df = builder.build()
+        if df.empty:
+            return
+
+        df["date"] = pd.to_datetime(df["date"])
+        # 2022-2024のみ使用（実際の複勝オッズがある期間）
+        df_test = df[(df["date"] >= "2022-01-01") & (df["date"] <= "2024-12-31")].copy()
+        df_train = df[df["date"] < pd.Timestamp("2022-01-01")].copy()
+
+        print(f"[INFO] 学習データ: {df_train['date'].min().date()} 〜 {df_train['date'].max().date()}")
+        print(f"[INFO] テスト期間: {df_test['date'].min().date()} 〜 {df_test['date'].max().date()} ({df_test['race_id'].nunique()}レース)")
+
+        score_model = RacePredictor("is_place", no_odds=True)
+        print("[INFO] モデル学習中...")
+        score_model.train(df_train)
+
+        race_ids = df_test["race_id"].unique()
+
+        strategies = {}
+        for gap in [2.0, 2.5, 3.0]:
+            for min_o in [0, 1.3, 1.5, 1.8]:
+                for top_n in [1, 2]:
+                    for pop in [6, 8]:
+                        name = f"gap{gap}_odds{min_o}_top{top_n}_pop{pop}"
+                        strategies[name] = {"top_n": top_n, "min_odds": min_o, "score_gap": gap, "max_popularity": pop}
+
+        print(f"\n{'戦略':<30} {'ベット':>6} {'的中率':>7} {'回収率':>7} {'収支':>10} {'平均odds':>8}")
+        print("-" * 75)
+
+        results = []
+        for strat_name, cfg in strategies.items():
+            records = []
+            for race_id in race_ids:
+                df_race = df_test[df_test["race_id"] == race_id].copy()
+                if len(df_race) < 3:
+                    continue
+
+                odds = self._get_odds_for_race(race_id)
+                if not odds.get("fukusho"):
+                    continue
+
+                ai_raw = score_model.predict_proba(df_race)
+                total = ai_raw.sum()
+                ai_win = ai_raw / total if total > 0 else ai_raw
+                n = len(df_race)
+                ai_pts = (ai_win * 100 * n).astype(int)
+
+                df_race = df_race.copy()
+                df_race["_ai_pts"] = ai_pts
+                df_race_sorted = df_race.sort_values("_ai_pts", ascending=False).reset_index(drop=True)
+
+                avg_pts = ai_pts.mean()
+                top_pts = df_race_sorted["_ai_pts"].iloc[0]
+
+                if cfg["score_gap"] > 0 and avg_pts > 0:
+                    if top_pts / avg_pts < cfg["score_gap"]:
+                        continue
+
+                top3_actual = set(df_race[df_race["finish_order"] <= 3]["horse_number"].tolist())
+
+                for rank in range(min(cfg["top_n"], len(df_race_sorted))):
+                    row = df_race_sorted.iloc[rank]
+                    hn = int(row["horse_number"])
+                    fo = odds["fukusho"].get(hn, 0)
+                    if fo <= 0 or fo < cfg["min_odds"]:
+                        continue
+                    pop_raw = row.get("popularity")
+                    pop = int(pop_raw) if pop_raw and str(pop_raw) not in ("", "nan", "None") else 0
+                    if pop > 0 and pop > cfg.get("max_popularity", 99):
+                        continue
+
+                    hit = hn in top3_actual
+                    records.append({"stake": 100, "hit": int(hit), "payout": 100 * fo if hit else 0, "fo": fo})
+
+            if not records:
+                continue
+            df_r = pd.DataFrame(records)
+            n = len(df_r)
+            hits = df_r["hit"].sum()
+            stake = df_r["stake"].sum()
+            pay = df_r["payout"].sum()
+            roi = pay / stake * 100 if stake > 0 else 0
+            profit = pay - stake
+            avg_o = df_r["fo"].mean()
+            results.append((roi, strat_name, n, hits/n*100, roi, profit, avg_o))
+            print(f"{strat_name:<30} {n:>6,} {hits/n*100:>6.1f}% {roi:>6.1f}% ¥{int(profit):>+9,} {avg_o:>7.2f}倍")
+
+        print("\n【TOP10 回収率ランキング】")
+        results.sort(reverse=True)
+        for roi, name, n, hr, r, profit, ao in results[:10]:
+            print(f"  {name:<30} {n:>6,}回 {hr:>5.1f}% {r:>6.1f}% ¥{int(profit):>+9,}")
+
     def run_strategy_comparison(
         self,
         df_test: pd.DataFrame,
