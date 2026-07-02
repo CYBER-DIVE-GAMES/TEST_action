@@ -1,6 +1,6 @@
 from jra_predictor.scraper.base import BaseScaper
 s = BaseScaper()
-soup = s.get('https://db.netkeiba.com/horse/2019104988/')
+soup = s.get_browser('https://db.netkeiba.com/horse/2019104988/', wait_selector='table.db_h_race_results')
 if soup is None:
     print('ページ取得失敗')
 else:
