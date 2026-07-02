@@ -15,7 +15,7 @@ class HorseProfileScraper(BaseScaper):
     def fetch_horse_history(self, horse_id: str) -> pd.DataFrame | None:
         """馬の全レース履歴を取得"""
         url = f"{NETKEIBA_BASE}/horse/{horse_id}/"
-        soup = self.get(url)
+        soup = self.get_browser(url, wait_selector="table.db_h_race_results")
         if soup is None:
             return None
 
