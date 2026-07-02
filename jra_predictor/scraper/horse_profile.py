@@ -24,9 +24,13 @@ class HorseProfileScraper(BaseScaper):
             return None
 
         rows = []
-        for tr in table.select("tr.HorseHistory"):
+        for tr in table.select("tr"):
             tds = tr.select("td")
             if len(tds) < 15:
+                continue
+            # ヘッダー行をスキップ（最初のtdが数字の日付でなければスキップ）
+            first = tds[0].get_text(strip=True)
+            if not re.match(r"\d{4}/\d{2}/\d{2}", first):
                 continue
             row = self._parse_history_row(tds, horse_id)
             if row:
