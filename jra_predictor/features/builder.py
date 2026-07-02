@@ -109,48 +109,100 @@ class FeatureBuilder:
         return df
 
     def _add_horse_form_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """馬の近走成績・能力指標"""
-        # 時系列で過去データを参照（当該レース以前のみ）
-        df = df.sort_values(["horse_id", "date", "race_id"], na_position="last")
+        """馬の近走成績・能力指標（horse_historyを優先使用、なければrace_resultsにフォールバック）"""
+        df_hist = self.db.read_table("horse_history")
 
-        for window in [3, 5, 10]:
-            col_win = f"win_rate_{window}"
-            col_place = f"place_rate_{window}"
-            col_avg_pop = f"avg_popularity_{window}"
-            col_avg_odds = f"avg_odds_{window}"
+        if not df_hist.empty and "horse_id" in df_hist.columns and "finish_order" in df_hist.columns:
+            logger.info(f"horse_historyから過去成績を計算: {len(df_hist)}行")
+            df_hist = df_hist.copy()
+            df_hist["date"] = pd.to_datetime(df_hist["date"], errors="coerce")
+            df_hist = df_hist.dropna(subset=["horse_id", "date"])
+            df_hist["finish_order"] = pd.to_numeric(df_hist["finish_order"], errors="coerce")
+            df_hist["popularity"] = pd.to_numeric(df_hist["popularity"], errors="coerce")
+            df_hist["odds"] = pd.to_numeric(df_hist["odds"], errors="coerce")
+            df_hist["last_3f"] = pd.to_numeric(df_hist["last_3f"], errors="coerce")
+            df_hist["is_win"] = (df_hist["finish_order"] == 1).astype(float)
+            df_hist["is_place"] = (df_hist["finish_order"] <= 3).astype(float)
+            df_hist = df_hist.sort_values(["horse_id", "date"]).reset_index(drop=True)
 
-            df[col_win] = df.groupby("horse_id")["is_win"].transform(
-                lambda x: x.shift(1).rolling(window, min_periods=1).mean()
+            stat_cols = {}
+            for window in [3, 5, 10]:
+                df_hist[f"win_rate_{window}"] = df_hist.groupby("horse_id")["is_win"].transform(
+                    lambda x: x.shift(1).rolling(window, min_periods=1).mean()
+                )
+                df_hist[f"place_rate_{window}"] = df_hist.groupby("horse_id")["is_place"].transform(
+                    lambda x: x.shift(1).rolling(window, min_periods=1).mean()
+                )
+                df_hist[f"avg_popularity_{window}"] = df_hist.groupby("horse_id")["popularity"].transform(
+                    lambda x: x.shift(1).rolling(window, min_periods=1).mean()
+                )
+                df_hist[f"avg_odds_{window}"] = df_hist.groupby("horse_id")["odds"].transform(
+                    lambda x: x.shift(1).rolling(window, min_periods=1).mean()
+                )
+                stat_cols.update({f"win_rate_{window}", f"place_rate_{window}",
+                                   f"avg_popularity_{window}", f"avg_odds_{window}"})
+
+            df_hist["prev_finish"] = df_hist.groupby("horse_id")["finish_order"].shift(1)
+            df_hist["prev2_finish"] = df_hist.groupby("horse_id")["finish_order"].shift(2)
+            df_hist["prev_odds"] = df_hist.groupby("horse_id")["odds"].shift(1)
+            df_hist["avg_last3f_5"] = df_hist.groupby("horse_id")["last_3f"].transform(
+                lambda x: x.shift(1).rolling(5, min_periods=1).mean()
             )
-            df[col_place] = df.groupby("horse_id")["is_place"].transform(
-                lambda x: x.shift(1).rolling(window, min_periods=1).mean()
+            df_hist["prev_date_h"] = df_hist.groupby("horse_id")["date"].shift(1)
+            df_hist["days_since_last"] = (df_hist["date"] - df_hist["prev_date_h"]).dt.days
+            df_hist["career_runs"] = df_hist.groupby("horse_id").cumcount()
+
+            merge_cols = ["horse_id", "date"] + [
+                "win_rate_3", "win_rate_5", "win_rate_10",
+                "place_rate_3", "place_rate_5", "place_rate_10",
+                "avg_popularity_3", "avg_popularity_5", "avg_popularity_10",
+                "avg_odds_3", "avg_odds_5", "avg_odds_10",
+                "prev_finish", "prev2_finish", "prev_odds",
+                "avg_last3f_5", "days_since_last", "career_runs",
+            ]
+            df_hist_latest = df_hist[merge_cols].drop_duplicates(subset=["horse_id", "date"], keep="last")
+
+            df = df.sort_values("date")
+            df_hist_latest = df_hist_latest.sort_values("date")
+            df = pd.merge_asof(
+                df,
+                df_hist_latest,
+                on="date",
+                by="horse_id",
+                direction="backward",
+                suffixes=("", "_h"),
             )
-            df[col_avg_pop] = df.groupby("horse_id")["popularity"].transform(
-                lambda x: x.shift(1).rolling(window, min_periods=1).mean()
+            # horse_historyにない馬はNaN（後続でLightGBMがNaN扱い）
+            df["odds_change"] = df["win_odds"] - df.get("prev_odds", pd.Series(dtype=float))
+
+        else:
+            logger.info("horse_historyが空のためrace_resultsから過去成績を計算")
+            df = df.sort_values(["horse_id", "date", "race_id"], na_position="last")
+
+            for window in [3, 5, 10]:
+                df[f"win_rate_{window}"] = df.groupby("horse_id")["is_win"].transform(
+                    lambda x: x.shift(1).rolling(window, min_periods=1).mean()
+                )
+                df[f"place_rate_{window}"] = df.groupby("horse_id")["is_place"].transform(
+                    lambda x: x.shift(1).rolling(window, min_periods=1).mean()
+                )
+                df[f"avg_popularity_{window}"] = df.groupby("horse_id")["popularity"].transform(
+                    lambda x: x.shift(1).rolling(window, min_periods=1).mean()
+                )
+                df[f"avg_odds_{window}"] = df.groupby("horse_id")["win_odds"].transform(
+                    lambda x: x.shift(1).rolling(window, min_periods=1).mean()
+                )
+
+            df["prev_finish"] = df.groupby("horse_id")["finish_order"].shift(1)
+            df["prev2_finish"] = df.groupby("horse_id")["finish_order"].shift(2)
+            df["prev_odds"] = df.groupby("horse_id")["win_odds"].shift(1)
+            df["odds_change"] = df["win_odds"] - df["prev_odds"]
+            df["avg_last3f_5"] = df.groupby("horse_id")["last_3f"].transform(
+                lambda x: x.shift(1).rolling(5, min_periods=1).mean()
             )
-            df[col_avg_odds] = df.groupby("horse_id")["win_odds"].transform(
-                lambda x: x.shift(1).rolling(window, min_periods=1).mean()
-            )
-
-        # 前走着順・前々走着順
-        df["prev_finish"] = df.groupby("horse_id")["finish_order"].shift(1)
-        df["prev2_finish"] = df.groupby("horse_id")["finish_order"].shift(2)
-
-        # 前走オッズ vs 今回オッズの変化
-        df["prev_odds"] = df.groupby("horse_id")["win_odds"].shift(1)
-        df["odds_change"] = df["win_odds"] - df["prev_odds"]
-
-        # 上がり3F平均（能力指標）
-        df["avg_last3f_5"] = df.groupby("horse_id")["last_3f"].transform(
-            lambda x: x.shift(1).rolling(5, min_periods=1).mean()
-        )
-
-        # 前走からの休養日数
-        df["prev_date"] = df.groupby("horse_id")["date"].shift(1)
-        df["days_since_last"] = (df["date"] - df["prev_date"]).dt.days
-
-        # キャリア（出走回数）
-        df["career_runs"] = df.groupby("horse_id").cumcount()
+            df["prev_date"] = df.groupby("horse_id")["date"].shift(1)
+            df["days_since_last"] = (df["date"] - df["prev_date"]).dt.days
+            df["career_runs"] = df.groupby("horse_id").cumcount()
 
         return df
 
