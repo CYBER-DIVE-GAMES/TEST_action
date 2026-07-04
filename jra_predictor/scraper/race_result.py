@@ -145,6 +145,9 @@ class RaceResultScraper(BaseScaper):
             info["weather"] = m.group(1) if m else ""
 
             m = re.search(r"馬場\s*[:：]\s*(\S+)", text)
+            if not m:
+                # 「良」「稍重」「重」「不良」を直接探す
+                m = re.search(r"(稍重|不良|良|重)", text)
             info["track_condition"] = m.group(1) if m else ""
 
             m = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", text)
@@ -175,6 +178,31 @@ class RaceResultScraper(BaseScaper):
             logger.warning(f"Race table not found: {race_id}")
             return None
 
+        # ヘッダー行からカラム位置を取得
+        col_idx = {}
+        header_row = table.select_one("tr")
+        if header_row:
+            for i, th in enumerate(header_row.select("th")):
+                key = th.get_text(strip=True)
+                # 短縮表記も対応
+                if "上り" in key:
+                    col_idx["上り"] = i
+                elif "通過" in key:
+                    col_idx["通過"] = i
+                elif "単勝" in key:
+                    col_idx["単勝"] = i
+                elif "人気" in key:
+                    col_idx["人気"] = i
+                elif "馬体重" in key:
+                    col_idx["馬体重"] = i
+                elif "調教師" in key:
+                    col_idx["調教師"] = i
+                elif "馬主" in key:
+                    col_idx["馬主"] = i
+                elif "賞金" in key:
+                    col_idx["賞金"] = i
+        logger.info(f"Column indices detected: {col_idx}")
+
         rows = []
         for tr in table.select("tr")[1:]:
             tds = tr.select("td")
@@ -182,7 +210,7 @@ class RaceResultScraper(BaseScaper):
                 continue
             if not tr.select_one("a[href*='/horse/']"):
                 continue
-            row = self._parse_result_row(tds, race_id)
+            row = self._parse_result_row(tds, race_id, col_idx=col_idx)
             if row:
                 rows.append(row)
 
@@ -201,7 +229,7 @@ class RaceResultScraper(BaseScaper):
 
         return df
 
-    def _parse_result_row(self, tds, race_id: str) -> dict | None:
+    def _parse_result_row(self, tds, race_id: str, col_idx: dict = None) -> dict | None:
         try:
             horse_link = tds[3].select_one("a")
             horse_id = ""
@@ -217,7 +245,17 @@ class RaceResultScraper(BaseScaper):
                 if m:
                     jockey_id = m.group(1)
 
-            trainer_link = tds[18].select_one("a") if len(tds) > 18 else None
+            # カラムインデックスをヘッダーから動的に取得（なければデフォルト値）
+            i_pass  = (col_idx or {}).get("通過",  14)
+            i_last3 = (col_idx or {}).get("上り",  15)
+            i_odds  = (col_idx or {}).get("単勝",  16)
+            i_pop   = (col_idx or {}).get("人気",  17)
+            i_weight= (col_idx or {}).get("馬体重", 18)
+            i_train = (col_idx or {}).get("調教師", 22)
+            i_owner = (col_idx or {}).get("馬主",  23)
+            i_prize = (col_idx or {}).get("賞金",  24)
+
+            trainer_link = tds[i_train].select_one("a") if len(tds) > i_train else None
             trainer_id = ""
             if trainer_link:
                 m = re.search(r"/trainer/(\w+)", trainer_link.get("href", ""))
@@ -226,6 +264,9 @@ class RaceResultScraper(BaseScaper):
 
             time_str = tds[7].get_text(strip=True)
             time_sec = self._parse_time(time_str)
+
+            def safe_get(i, fn):
+                return fn(tds[i].get_text(strip=True)) if len(tds) > i else None
 
             return {
                 "finish_order": self._safe_int(tds[0].get_text(strip=True)),
@@ -239,16 +280,16 @@ class RaceResultScraper(BaseScaper):
                 "jockey_id": jockey_id,
                 "finish_time_sec": time_sec,
                 "margin": tds[8].get_text(strip=True),
-                "passing_order": tds[10].get_text(strip=True) if len(tds) > 10 else "",
-                "last_3f": self._safe_float(tds[11].get_text(strip=True)) if len(tds) > 11 else None,
-                "horse_weight": self._parse_horse_weight(tds[14].get_text(strip=True)) if len(tds) > 14 else None,
-                "horse_weight_diff": self._parse_horse_weight_diff(tds[14].get_text(strip=True)) if len(tds) > 14 else None,
-                "win_odds": self._safe_float(tds[12].get_text(strip=True)) if len(tds) > 12 else None,
-                "popularity": self._safe_int(tds[13].get_text(strip=True)) if len(tds) > 13 else None,
-                "trainer_name": tds[18].get_text(strip=True) if len(tds) > 18 else "",
+                "passing_order": safe_get(i_pass, str) or "",
+                "last_3f": safe_get(i_last3, self._safe_float),
+                "win_odds": safe_get(i_odds, self._safe_float),
+                "popularity": safe_get(i_pop, self._safe_int),
+                "horse_weight": safe_get(i_weight, self._parse_horse_weight),
+                "horse_weight_diff": safe_get(i_weight, self._parse_horse_weight_diff),
+                "trainer_name": safe_get(i_train, str) or "",
                 "trainer_id": trainer_id,
-                "owner": tds[19].get_text(strip=True) if len(tds) > 19 else "",
-                "prize": self._safe_float(tds[20].get_text(strip=True).replace(",", "")) if len(tds) > 20 else None,
+                "owner": safe_get(i_owner, str) or "",
+                "prize": self._safe_float(tds[i_prize].get_text(strip=True).replace(",", "")) if len(tds) > i_prize else None,
             }
         except Exception as e:
             logger.debug(f"Row parse error in {race_id}: {e}")
