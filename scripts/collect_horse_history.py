@@ -34,14 +34,24 @@ scraper = HorseProfileScraper()
 ok = 0
 ng = 0
 
+consecutive_fails = 0
+
 for i, horse_id in enumerate(horse_ids):
     try:
         df = scraper.fetch_horse_history(horse_id)
         if df is not None and len(df) > 0:
             db.upsert_horse_history(df)
             ok += 1
+            consecutive_fails = 0
         else:
             ng += 1
+            consecutive_fails += 1
+
+        # 連続失敗が10回続いたらブロックの可能性→少し待つ
+        if consecutive_fails >= 10:
+            print(f"  連続失敗{consecutive_fails}回 → 30秒待機中...")
+            time.sleep(30)
+            consecutive_fails = 0
 
         if (i + 1) % 50 == 0:
             pct = (i + 1) / len(horse_ids) * 100
@@ -49,7 +59,7 @@ for i, horse_id in enumerate(horse_ids):
 
     except Exception as e:
         ng += 1
-        if (i + 1) % 50 == 0:
-            print(f"  エラー {horse_id}: {e}")
+        consecutive_fails += 1
+        print(f"  エラー {horse_id}: {str(e)[:80]}")
 
 print(f"\n完了: 成功={ok} 失敗={ng}")
