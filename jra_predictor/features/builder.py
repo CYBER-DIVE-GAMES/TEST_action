@@ -139,8 +139,7 @@ class FeatureBuilder:
                 df_hist[f"avg_odds_{window}"] = df_hist.groupby("horse_id")["odds"].transform(
                     lambda x: x.shift(1).rolling(window, min_periods=1).mean()
                 )
-                stat_cols.update({f"win_rate_{window}", f"place_rate_{window}",
-                                   f"avg_popularity_{window}", f"avg_odds_{window}"})
+                pass  # columns already added to df_hist
 
             df_hist["prev_finish"] = df_hist.groupby("horse_id")["finish_order"].shift(1)
             df_hist["prev2_finish"] = df_hist.groupby("horse_id")["finish_order"].shift(2)
